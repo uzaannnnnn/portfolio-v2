@@ -57,16 +57,37 @@ export function filterPublishedProjects(projects: ProjectDetail[]): ProjectSumma
   return projects
     .filter((project) => project.status === "published")
     .sort((a, b) => a.displayOrder - b.displayOrder)
-    .map(({ screenshots: _s, caseStudySections: _c, ...summary }) => summary);
+    .map(
+      ({
+        screenshots: _s,
+        caseStudySections: _c,
+        architectureDiagram: _a,
+        ...summary
+      }) => summary,
+    );
+}
+
+export interface FixtureRepositoryDataOverrides {
+  projects?: ProjectDetail[];
+  notes?: EngineeringNote[];
 }
 
 /**
  * Lightweight, read-only fixture adapter for local development and automated testing.
  * Strictly filters out draft/archived records just like the production database queries.
+ * Accepts optional constructor overrides strictly for isolated unit/component testing.
  */
 export class FixturePortfolioRepository implements PortfolioDataRepository {
+  private readonly projectsSource: ProjectDetail[];
+  private readonly notesSource: EngineeringNote[];
+
+  constructor(overrides?: FixtureRepositoryDataOverrides) {
+    this.projectsSource = overrides?.projects ?? INITIAL_PROJECTS;
+    this.notesSource = overrides?.notes ?? INITIAL_NOTES;
+  }
+
   async getPublicPortfolioBundle(): Promise<PublicPortfolioBundle> {
-    const publishedProjects = filterPublishedProjects(INITIAL_PROJECTS);
+    const publishedProjects = filterPublishedProjects(this.projectsSource);
     const featuredProjects = publishedProjects.filter((project) => project.isFeatured);
 
     const skillCategories: SkillCategory[] = INITIAL_SKILL_CATEGORIES.filter(
@@ -93,7 +114,7 @@ export class FixturePortfolioRepository implements PortfolioDataRepository {
       (cert) => cert.status === "published",
     ).sort((a, b) => a.displayOrder - b.displayOrder);
 
-    const notes: EngineeringNote[] = INITIAL_NOTES.filter(
+    const notes: EngineeringNote[] = this.notesSource.filter(
       (note) => note.status === "published",
     );
 
@@ -122,22 +143,22 @@ export class FixturePortfolioRepository implements PortfolioDataRepository {
   }
 
   async getPublishedProjects(): Promise<ProjectSummary[]> {
-    return filterPublishedProjects(INITIAL_PROJECTS);
+    return filterPublishedProjects(this.projectsSource);
   }
 
   async getPublishedProjectBySlug(slug: string): Promise<ProjectDetail | null> {
-    const found = INITIAL_PROJECTS.find(
+    const found = this.projectsSource.find(
       (project) => project.slug === slug && project.status === "published",
     );
     return found ?? null;
   }
 
   async getPublishedNotes(): Promise<EngineeringNote[]> {
-    return INITIAL_NOTES.filter((note) => note.status === "published");
+    return this.notesSource.filter((note) => note.status === "published");
   }
 
   async getPublishedNoteBySlug(slug: string): Promise<EngineeringNote | null> {
-    const found = INITIAL_NOTES.find(
+    const found = this.notesSource.find(
       (note) => note.slug === slug && note.status === "published",
     );
     return found ?? null;

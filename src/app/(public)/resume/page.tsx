@@ -9,6 +9,16 @@ export const metadata: Metadata = {
   title: "Resume",
   description:
     "Curriculum Vitae and technical resume of Muhamad Fauzan — Software Engineer.",
+  alternates: {
+    canonical: "/resume",
+  },
+  openGraph: {
+    title: "Resume | Muhamad Fauzan",
+    description:
+      "Curriculum Vitae and technical resume of Muhamad Fauzan — Software Engineer.",
+    url: "/resume",
+    type: "website",
+  },
 };
 
 export default async function ResumePage() {

@@ -335,7 +335,51 @@ export const INITIAL_PROJECTS: ProjectDetail[] = [
 export const INITIAL_EXPERIENCES: ExperienceItem[] = [];
 export const INITIAL_EDUCATIONS: EducationItem[] = [];
 export const INITIAL_CERTIFICATIONS: CertificationItem[] = [];
-export const INITIAL_NOTES: EngineeringNote[] = [];
+export const INITIAL_NOTES: EngineeringNote[] = [
+  {
+    id: "note-draft-publishing-architecture",
+    title: "Designing Explicit Draft-to-Publish Content Workflows in Relational Systems",
+    slug: "explicit-draft-to-publish-content-workflows",
+    summary:
+      "Architectural patterns for isolating editable working drafts from immutable published projections in PostgreSQL-backed content management systems.",
+    category: "System Architecture",
+    tags: ["PostgreSQL", "System Design", "Data Integrity", "Next.js"],
+    publishedAt: "2026-11-06",
+    coverImageUrl: null,
+    seoTitle:
+      "Designing Explicit Draft-to-Publish Content Workflows | Muhamad Fauzan",
+    seoDescription:
+      "Architectural notes on separating draft mutations from public read models using revision snapshots and server-side cache invalidation.",
+    status: "published",
+    contentMdx: `## Problem Context
+
+When building a content management system, mutating a single database row in place creates an immediate operational risk: incomplete edits, unverified metadata, or broken asset references become visible to anonymous visitors before review.
+
+### Core Requirements
+
+- **Strict Read Isolation:** Anonymous public queries must only ever read verified, explicitly published snapshots.
+- **Transactional Publication:** Promoting a draft to published status must update the live projection atomically and record an immutable revision entry.
+- **Selective Cache Revalidation:** Public pages should remain statically or incrementally cached until an explicit publish event triggers path or tag invalidation.
+
+## Revision Snapshot Pattern
+
+Instead of coupling public routes directly to mutable form columns, each logical entity maintains a separated \`published_data\` projection alongside its working \`draft_data\` state, backed by an append-only \`content_revisions\` table.
+
+\`\`\`sql
+SELECT slug, published_data
+FROM projects
+WHERE status = 'published'
+  AND published_revision_id IS NOT NULL
+ORDER BY display_order ASC;
+\`\`\`
+
+## Verification Checklist
+
+1. Confirm anonymous queries reject rows where \`status != 'published'\`.
+2. Verify sitemap and metadata generators exclude draft slugs.
+3. Validate that failed publication transactions preserve the previous published revision.`,
+  },
+];
 export const INITIAL_ACTIVE_RESUME: ActiveResume | null = null;
 
 export const INITIAL_BOOT_GREETINGS: BootGreeting[] = [

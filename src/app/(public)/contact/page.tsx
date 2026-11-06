@@ -6,6 +6,16 @@ export const metadata: Metadata = {
   title: "Contact",
   description:
     "Contact Muhamad Fauzan for software engineering opportunities and technical inquiries.",
+  alternates: {
+    canonical: "/contact",
+  },
+  openGraph: {
+    title: "Contact | Muhamad Fauzan",
+    description:
+      "Contact Muhamad Fauzan for software engineering opportunities and technical inquiries.",
+    url: "/contact",
+    type: "website",
+  },
 };
 
 export default async function ContactPage() {

@@ -4,7 +4,7 @@ import path from "path";
 const ARTIFACT_DIR =
   "/Users/zannho/.gemini/antigravity/brain/ca84d6f3-11dc-4b2d-975c-32f3c10448ab";
 
-test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () => {
+test.describe("Sprint 1 & 2 — Public Portfolio, Showcase, SEO & Draft Isolation", () => {
   test("first visit displays Indonesian boot experience, allows skipping/entering, and persists on reload", async ({
     page,
   }) => {
@@ -16,12 +16,6 @@ test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () =
     await expect(page.getByTestId("boot-greeting-stage")).toContainText(
       "Selamat Datang",
     );
-    await page.waitForTimeout(450);
-
-    await page.screenshot({
-      path: path.join(ARTIFACT_DIR, "sprint1_boot_greeting.png"),
-      fullPage: false,
-    });
 
     // Jump to welcome screen and verify personal welcome message
     await page.getByTestId("boot-jump-welcome-button").click();
@@ -29,21 +23,10 @@ test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () =
     await expect(welcomeStage).toContainText("Muhamad Fauzan");
     await expect(welcomeStage).toContainText("Software Engineer");
     await expect(welcomeStage).toContainText("Welcome to my portfolio.");
-    await page.waitForTimeout(450);
-
-    await page.screenshot({
-      path: path.join(ARTIFACT_DIR, "sprint1_boot_welcome.png"),
-      fullPage: false,
-    });
 
     // Enter portfolio
     await page.getByTestId("boot-enter-portfolio-button").click();
     await expect(overlay).toBeHidden();
-
-    await page.screenshot({
-      path: path.join(ARTIFACT_DIR, "sprint1_homepage_desktop.png"),
-      fullPage: true,
-    });
 
     // Subsequent visit skips boot experience automatically
     await page.reload();
@@ -61,8 +44,9 @@ test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () =
     await expect(overlay).toBeHidden();
   });
 
-  test("draft projects (GeoEntity, ClayCV, SPK Bansos SAW) are not exposed publicly", async ({
+  test("draft projects (GeoEntity, ClayCV, SPK Bansos SAW) are strictly isolated from public pages, metadata, and sitemap", async ({
     page,
+    request,
   }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem("mf_portfolio_boot_seen_v1", "1");
@@ -77,14 +61,82 @@ test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () =
       page.getByText("No published projects are live yet"),
     ).toBeVisible();
 
+    // Direct access to all 3 draft project slugs returns 404
+    for (const draftSlug of ["geoentity", "claycv", "spk-bansos-saw"]) {
+      const response = await page.goto(`/projects/${draftSlug}`);
+      expect(response?.status()).toBe(404);
+    }
+
+    // Verify sitemap.xml excludes draft projects and includes published notes
+    const sitemapRes = await request.get("/sitemap.xml");
+    expect(sitemapRes.status()).toBe(200);
+    const sitemapXml = await sitemapRes.text();
+    expect(sitemapXml).toContain("/notes/explicit-draft-to-publish-content-workflows");
+    expect(sitemapXml).not.toContain("/projects/geoentity");
+    expect(sitemapXml).not.toContain("/projects/claycv");
+    expect(sitemapXml).not.toContain("/projects/spk-bansos-saw");
+
+    // Verify robots.txt disallows /admin and points to sitemap.xml
+    const robotsRes = await request.get("/robots.txt");
+    expect(robotsRes.status()).toBe(200);
+    const robotsTxt = await robotsRes.text();
+    expect(robotsTxt).toContain("Disallow: /admin");
+    expect(robotsTxt).toContain("sitemap.xml");
+  });
+
+  test("Engineering Notes directory, MDX detail page, and Homepage JSON-LD structured data work across desktop and mobile", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("mf_portfolio_boot_seen_v1", "1");
+    });
+
+    // Verify JSON-LD structured data on Homepage
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const jsonLdContent = await page
+      .locator("script#portfolio-jsonld")
+      .textContent();
+    expect(jsonLdContent).toBeTruthy();
+    const parsedJsonLd = JSON.parse(jsonLdContent ?? "{}");
+    expect(parsedJsonLd["@context"]).toBe("https://schema.org");
+
+    // Navigate to Engineering Notes directory
+    await page.goto("/notes");
+    await expect(
+      page.getByRole("heading", { name: "Engineering Notes" }),
+    ).toBeVisible();
+    const noteCard = page.getByTestId(
+      "note-card-explicit-draft-to-publish-content-workflows",
+    );
+    await expect(noteCard).toBeVisible();
+
     await page.screenshot({
-      path: path.join(ARTIFACT_DIR, "sprint1_projects_draft_isolated.png"),
+      path: path.join(ARTIFACT_DIR, "sprint2_notes_directory_desktop.png"),
       fullPage: true,
     });
 
-    // Direct access to draft project slug returns 404
-    const response = await page.goto("/projects/geoentity");
-    expect(response?.status()).toBe(404);
+    // Open Engineering Note detail page and verify safe MDX blocks
+    await noteCard.getByRole("link", { name: "Read Article" }).click();
+    await expect(page).toHaveURL(
+      /\/notes\/explicit-draft-to-publish-content-workflows$/,
+    );
+    await expect(page.getByTestId("note-detail-article")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Revision Snapshot Pattern" }),
+    ).toBeVisible();
+
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, "sprint2_note_detail_desktop.png"),
+      fullPage: true,
+    });
+
+    // Mobile screenshot of Note Detail Page
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, "sprint2_note_detail_mobile.png"),
+      fullPage: true,
+    });
   });
 
   test("public navigation and mobile menu drawer work across routes", async ({
@@ -117,10 +169,5 @@ test.describe("Sprint 1 — Public Portfolio & Indonesian Boot Experience", () =
     await menuToggle.click();
     const drawer = page.getByTestId("mobile-navigation-drawer");
     await expect(drawer).toBeVisible();
-
-    await page.screenshot({
-      path: path.join(ARTIFACT_DIR, "sprint1_mobile_navigation.png"),
-      fullPage: false,
-    });
   });
 });

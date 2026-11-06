@@ -11,6 +11,16 @@ export const metadata: Metadata = {
   title: "About",
   description:
     "Background, engineering philosophy, technical expertise, and academic foundation of Muhamad Fauzan.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "About | Muhamad Fauzan",
+    description:
+      "Background, engineering philosophy, technical expertise, and academic foundation of Muhamad Fauzan.",
+    url: "/about",
+    type: "profile",
+  },
 };
 
 export default async function AboutPage() {

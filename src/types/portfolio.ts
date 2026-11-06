@@ -89,6 +89,45 @@ export type CaseStudySectionType =
   | "results"
   | "lessons";
 
+export const CASE_STUDY_SECTION_LABELS: Record<CaseStudySectionType, string> = {
+  overview: "Overview",
+  problem: "Problem Statement",
+  objectives: "Objectives",
+  solution: "Proposed Solution",
+  architecture: "System Architecture",
+  implementation: "Technical Implementation",
+  database: "Database Design",
+  api: "API Design",
+  challenges: "Engineering Challenges",
+  tradeoffs: "Technical Decisions & Trade-offs",
+  testing: "Testing & Quality Assurance",
+  deployment: "Deployment & Infrastructure",
+  results: "Results",
+  lessons: "Lessons Learned",
+};
+
+export interface ArchitectureNode {
+  id: string;
+  label: string;
+  layer: "client" | "application" | "service" | "data" | "infrastructure";
+  description: string;
+  technologies?: string[];
+}
+
+export interface ArchitectureConnection {
+  id: string;
+  from: string;
+  to: string;
+  protocolOrAction: string;
+}
+
+export interface ArchitectureDiagramData {
+  title: string;
+  summary: string;
+  nodes: ArchitectureNode[];
+  connections: ArchitectureConnection[];
+}
+
 export interface CaseStudySection {
   id: string;
   sectionType: CaseStudySectionType;
@@ -117,6 +156,7 @@ export interface ProjectSummary {
 
 export interface ProjectDetail extends ProjectSummary {
   screenshots: { url: string; alt: string }[];
+  architectureDiagram?: ArchitectureDiagramData | null;
   caseStudySections: CaseStudySection[];
 }
 

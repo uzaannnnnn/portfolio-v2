@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { getPortfolioRepository } from "@/lib/database/repository";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -8,6 +9,16 @@ export const metadata: Metadata = {
   title: "Engineering Notes",
   description:
     "Technical articles, system architecture notes, and software engineering write-ups by Muhamad Fauzan.",
+  alternates: {
+    canonical: "/notes",
+  },
+  openGraph: {
+    title: "Engineering Notes | Muhamad Fauzan",
+    description:
+      "Technical articles, system architecture notes, and software engineering write-ups by Muhamad Fauzan.",
+    url: "/notes",
+    type: "website",
+  },
 };
 
 export default async function NotesPage() {
@@ -42,9 +53,10 @@ export default async function NotesPage() {
               {notes.map((note) => (
                 <article
                   key={note.id}
-                  className="rounded-lg border border-border-token bg-background p-6"
+                  data-testid={`note-card-${note.slug}`}
+                  className="rounded-lg border border-border-token bg-background p-6 transition-colors hover:border-foreground/30"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="accent">{note.category}</Badge>
                     {note.publishedAt && (
                       <span className="font-mono text-xs text-muted-foreground">
@@ -63,6 +75,24 @@ export default async function NotesPage() {
                   <p className="type-body mt-2 max-w-[720px] text-secondary-foreground">
                     {note.summary}
                   </p>
+                  {note.tags.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {note.tags.map((tag) => (
+                        <Badge key={tag} variant="outline">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-5 border-t border-border-token pt-4">
+                    <Link
+                      href={`/notes/${note.slug}`}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent"
+                    >
+                      <span>Read Article</span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                  </div>
                 </article>
               ))}
             </div>
