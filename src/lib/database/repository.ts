@@ -1,17 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { getCmsStore } from "@/lib/database/cms-store";
 import {
   INITIAL_ABOUT,
   INITIAL_ACTIVE_RESUME,
-  INITIAL_BOOT_GREETINGS,
-  INITIAL_CERTIFICATIONS,
-  INITIAL_EDUCATIONS,
-  INITIAL_EXPERIENCES,
   INITIAL_HERO,
-  INITIAL_NOTES,
   INITIAL_PROFILE,
-  INITIAL_PROJECTS,
   INITIAL_SITE_SETTINGS,
-  INITIAL_SKILL_CATEGORIES,
 } from "@/lib/database/fixtures";
 import {
   SupabaseConnectionError,
@@ -82,21 +76,47 @@ export interface FixtureRepositoryDataOverrides {
  * Accepts optional constructor overrides strictly for isolated unit/component testing.
  */
 export class FixturePortfolioRepository implements PortfolioDataRepository {
-  private readonly projectsSource: ProjectDetail[];
-  private readonly notesSource: EngineeringNote[];
+  private readonly projectsOverride?: ProjectDetail[];
+  private readonly notesOverride?: EngineeringNote[];
 
   constructor(overrides?: FixtureRepositoryDataOverrides) {
-    this.projectsSource = overrides?.projects ?? INITIAL_PROJECTS;
-    this.notesSource = overrides?.notes ?? INITIAL_NOTES;
+    this.projectsOverride = overrides?.projects;
+    this.notesOverride = overrides?.notes;
+  }
+
+  private resolvePublishedProjects(): ProjectDetail[] {
+    if (this.projectsOverride) {
+      return this.projectsOverride.filter((p) => p.status === "published");
+    }
+    const store = getCmsStore();
+    return store
+      .listByType<ProjectDetail>("project")
+      .filter((r) => r.status === "published" && r.publishedData !== null)
+      .map((r) => r.publishedData!);
+  }
+
+  private resolvePublishedNotes(): EngineeringNote[] {
+    if (this.notesOverride) {
+      return this.notesOverride.filter((n) => n.status === "published");
+    }
+    const store = getCmsStore();
+    return store
+      .listByType<EngineeringNote>("note")
+      .filter((r) => r.status === "published" && r.publishedData !== null)
+      .map((r) => r.publishedData!);
   }
 
   async getPublicPortfolioBundle(): Promise<PublicPortfolioBundle> {
-    const publishedProjects = filterPublishedProjects(this.projectsSource);
-    const featuredProjects = publishedProjects.filter((project) => project.isFeatured);
+    const store = getCmsStore();
+    const publishedProjects = filterPublishedProjects(
+      this.resolvePublishedProjects(),
+    );
+    const featuredProjects = publishedProjects.filter(
+      (project) => project.isFeatured,
+    );
 
-    const skillCategories: SkillCategory[] = INITIAL_SKILL_CATEGORIES.filter(
-      (cat) => cat.isEnabled,
-    )
+    const skillCategories: SkillCategory[] = store.skillCategories
+      .filter((cat) => cat.isEnabled)
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .map((category) => ({
         ...category,
@@ -106,34 +126,59 @@ export class FixturePortfolioRepository implements PortfolioDataRepository {
       }))
       .filter((category) => category.skills.length > 0);
 
-    const experiences: ExperienceItem[] = INITIAL_EXPERIENCES.filter(
-      (exp) => exp.status === "published",
-    ).sort((a, b) => a.displayOrder - b.displayOrder);
+    const experiences: ExperienceItem[] = store
+      .listByType<ExperienceItem>("experience")
+      .filter((exp) => exp.status === "published" && exp.publishedData !== null)
+      .map((exp) => exp.publishedData!)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
 
-    const educations: EducationItem[] = INITIAL_EDUCATIONS.filter(
-      (edu) => edu.status === "published",
-    ).sort((a, b) => a.displayOrder - b.displayOrder);
+    const educations: EducationItem[] = store
+      .listByType<EducationItem>("education")
+      .filter((edu) => edu.status === "published" && edu.publishedData !== null)
+      .map((edu) => edu.publishedData!)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
 
-    const certifications: CertificationItem[] = INITIAL_CERTIFICATIONS.filter(
-      (cert) => cert.status === "published",
-    ).sort((a, b) => a.displayOrder - b.displayOrder);
+    const certifications: CertificationItem[] = store
+      .listByType<CertificationItem>("certification")
+      .filter((cert) => cert.status === "published" && cert.publishedData !== null)
+      .map((cert) => cert.publishedData!)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
 
-    const notes: EngineeringNote[] = this.notesSource.filter(
-      (note) => note.status === "published",
+    const notes: EngineeringNote[] = this.resolvePublishedNotes();
+
+    const bootGreetings = filterAndSortPublicGreetings(store.bootGreetings);
+
+    const publishedResume = store.resumeFiles.find(
+      (r) => r.status === "published" && r.isActive,
     );
-
-    const bootGreetings = filterAndSortPublicGreetings(INITIAL_BOOT_GREETINGS);
-
     const activeResume: ActiveResume | null =
-      INITIAL_ACTIVE_RESUME && INITIAL_ACTIVE_RESUME.status === "published"
+      publishedResume ??
+      (INITIAL_ACTIVE_RESUME && INITIAL_ACTIVE_RESUME.status === "published"
         ? INITIAL_ACTIVE_RESUME
-        : null;
+        : null);
+
+    const profileEntity = store.entities.get("profile:singleton");
+    const settingsEntity = store.entities.get("site_settings:singleton");
+    const heroEntity = store.entities.get("hero_content:singleton");
+    const aboutEntity = store.entities.get("about_content:singleton");
 
     return {
-      profile: INITIAL_PROFILE,
-      siteSettings: INITIAL_SITE_SETTINGS,
-      hero: INITIAL_HERO,
-      about: INITIAL_ABOUT,
+      profile:
+        profileEntity?.status === "published" && profileEntity.publishedData
+          ? (profileEntity.publishedData as ProfileData)
+          : INITIAL_PROFILE,
+      siteSettings:
+        settingsEntity?.status === "published" && settingsEntity.publishedData
+          ? (settingsEntity.publishedData as SiteSettings)
+          : INITIAL_SITE_SETTINGS,
+      hero:
+        heroEntity?.status === "published" && heroEntity.publishedData
+          ? (heroEntity.publishedData as HeroContent)
+          : INITIAL_HERO,
+      about:
+        aboutEntity?.status === "published" && aboutEntity.publishedData
+          ? (aboutEntity.publishedData as AboutContent)
+          : INITIAL_ABOUT,
       skillCategories,
       featuredProjects,
       allPublishedProjects: publishedProjects,
@@ -147,29 +192,29 @@ export class FixturePortfolioRepository implements PortfolioDataRepository {
   }
 
   async getPublishedProjects(): Promise<ProjectSummary[]> {
-    return filterPublishedProjects(this.projectsSource);
+    return filterPublishedProjects(this.resolvePublishedProjects());
   }
 
   async getPublishedProjectBySlug(slug: string): Promise<ProjectDetail | null> {
-    const found = this.projectsSource.find(
+    const found = this.resolvePublishedProjects().find(
       (project) => project.slug === slug && project.status === "published",
     );
     return found ?? null;
   }
 
   async getPublishedNotes(): Promise<EngineeringNote[]> {
-    return this.notesSource.filter((note) => note.status === "published");
+    return this.resolvePublishedNotes();
   }
 
   async getPublishedNoteBySlug(slug: string): Promise<EngineeringNote | null> {
-    const found = this.notesSource.find(
+    const found = this.resolvePublishedNotes().find(
       (note) => note.slug === slug && note.status === "published",
     );
     return found ?? null;
   }
 
   async getBootGreetings(): Promise<BootGreeting[]> {
-    return filterAndSortPublicGreetings(INITIAL_BOOT_GREETINGS);
+    return filterAndSortPublicGreetings(getCmsStore().bootGreetings);
   }
 }
 

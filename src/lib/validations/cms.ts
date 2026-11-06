@@ -91,6 +91,167 @@ export const noteDraftSchema = z.object({
   status: z.enum(["draft", "published", "archived"]),
 });
 
+export const profileDraftSchema = z.object({
+  fullName: z.string().trim().min(2, "Full name is required").max(100),
+  professionalTitle: z.string().trim().min(2, "Professional title is required").max(100),
+  tagline: z.string().trim().min(5, "Tagline is required").max(200),
+  shortBio: z.string().trim().min(10, "Short bio is required").max(600),
+  location: z.string().trim().max(100),
+  email: z.string().trim().email("Invalid email").or(z.literal("")),
+  githubUrl: z.string().trim().url("Invalid GitHub URL").or(z.literal("")),
+  linkedinUrl: z.string().trim().url("Invalid LinkedIn URL").or(z.literal("")),
+  websiteUrl: z.string().trim().url("Invalid Website URL").or(z.literal("")),
+  avatarUrl: z.string().url().nullable(),
+  availableForWork: z.boolean(),
+  availabilityNote: z.string().trim().max(200),
+});
+
+export const heroDraftSchema = z.object({
+  eyebrow: z.string().trim().min(2).max(100),
+  headline: z.string().trim().min(5, "Headline is required").max(200),
+  supportingDescription: z.string().trim().min(10).max(500),
+  primaryCtaLabel: z.string().trim().min(2).max(60),
+  primaryCtaHref: z.string().trim().min(1).max(200),
+  secondaryCtaLabel: z.string().trim().min(2).max(60),
+  secondaryCtaHref: z.string().trim().min(1).max(200),
+  engineeringFocusAreas: z.array(z.string().trim().min(1)).min(1),
+});
+
+export const engineeringPillarSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(2).max(120),
+  summary: z.string().trim().min(10).max(400),
+  practices: z.array(z.string().trim().min(1)),
+});
+
+export const aboutDraftSchema = z.object({
+  introduction: z.string().trim().min(10, "Introduction is required").max(500),
+  narrativeParagraphs: z.array(z.string().trim().min(10)).min(1),
+  engineeringPhilosophyTitle: z.string().trim().min(2).max(120),
+  engineeringPhilosophySubtitle: z.string().trim().min(5).max(300),
+  engineeringPillars: z.array(engineeringPillarSchema).min(1),
+  coreDomains: z.array(z.string().trim().min(1)).min(1),
+});
+
+export const skillItemSchema = z.object({
+  id: z.string().min(1),
+  categoryId: z.string().min(1),
+  name: z.string().trim().min(1, "Skill name is required").max(80),
+  proficiency: z
+    .enum(["Core", "Proficient", "Working Knowledge", "Exploring"])
+    .optional(),
+  isEnabled: z.boolean(),
+  displayOrder: z.number().int().min(0),
+  status: z.enum(["draft", "published", "archived"]),
+});
+
+export const skillCategorySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(2, "Category name is required").max(80),
+  slug: z.string().trim().min(2).max(80).regex(SLUG_REGEX),
+  description: z.string().trim().max(300),
+  displayOrder: z.number().int().min(0),
+  isEnabled: z.boolean(),
+  skills: z.array(skillItemSchema),
+});
+
+export const experienceDraftSchema = z.object({
+  id: z.string().min(1),
+  organization: z.string().trim().min(2, "Organization is required").max(120),
+  role: z.string().trim().min(2, "Role is required").max(120),
+  employmentType: z.enum([
+    "Internship",
+    "Full-time",
+    "Part-time",
+    "Freelance",
+    "Contract",
+  ]),
+  workSystem: z.enum(["Onsite", "Remote", "Hybrid"]),
+  location: z.string().trim().max(120),
+  startMonth: z.number().int().min(1).max(12),
+  startYear: z.number().int().min(1990).max(2100),
+  endMonth: z.number().int().min(1).max(12).nullable(),
+  endYear: z.number().int().min(1990).max(2100).nullable(),
+  isCurrent: z.boolean(),
+  description: z.string().trim().min(5).max(1000),
+  responsibilities: z.array(z.string().trim().min(1)),
+  technicalContributions: z.array(z.string().trim().min(1)),
+  achievements: z.array(z.string().trim().min(1)),
+  technologies: z.array(z.string().trim().min(1)),
+  displayOrder: z.number().int().min(0),
+  status: z.enum(["draft", "published", "archived"]),
+});
+
+export const educationDraftSchema = z.object({
+  id: z.string().min(1),
+  institution: z.string().trim().min(2, "Institution is required").max(160),
+  degree: z.string().trim().min(2, "Degree is required").max(120),
+  major: z.string().trim().min(2, "Major is required").max(120),
+  startDate: z.string().trim().min(2).max(40),
+  endDate: z.string().trim().max(40).nullable(),
+  isCurrent: z.boolean(),
+  gpa: z.string().trim().max(20).nullable(),
+  thesisTitle: z.string().trim().max(300).nullable(),
+  defenseGrade: z.string().trim().max(40).nullable(),
+  description: z.string().trim().max(800).nullable(),
+  displayOrder: z.number().int().min(0),
+  status: z.enum(["draft", "published", "archived"]),
+});
+
+export const certificationDraftSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(2, "Certificate name is required").max(160),
+  issuingOrganization: z.string().trim().min(2, "Issuing organization is required").max(160),
+  issueMonth: z.number().int().min(1).max(12),
+  issueYear: z.number().int().min(1990).max(2100),
+  expirationMonth: z.number().int().min(1).max(12).nullable(),
+  expirationYear: z.number().int().min(1990).max(2100).nullable(),
+  credentialId: z.string().trim().max(120).nullable(),
+  credentialUrl: z.string().trim().url().nullable(),
+  certificateMediaUrl: z.string().trim().url().nullable(),
+  description: z.string().trim().max(600).nullable(),
+  displayOrder: z.number().int().min(0),
+  status: z.enum(["draft", "published", "archived"]),
+});
+
+export const bootGreetingSchema = z.object({
+  id: z.string().min(1),
+  language: z.string().trim().min(2, "Language is required").max(80),
+  greeting: z.string().trim().min(1, "Greeting is required").max(120),
+  meaning: z.string().trim().min(1, "Meaning is required").max(120),
+  isEnabled: z.boolean(),
+  displayOrder: z.number().int().min(0),
+  status: z.enum(["draft", "published", "archived"]),
+});
+
+export const siteSettingsDraftSchema = z.object({
+  siteTitle: z.string().trim().min(3, "Site title is required").max(120),
+  siteDescription: z.string().trim().min(10, "Site description is required").max(320),
+  canonicalBaseUrl: z.string().trim().url("Canonical URL must be a valid URL"),
+  homepageSectionOrder: z
+    .array(
+      z.enum([
+        "hero",
+        "about",
+        "skills",
+        "featured_projects",
+        "experience",
+        "philosophy",
+        "education",
+        "certifications",
+        "contact",
+      ]),
+    )
+    .min(1),
+  bootWelcome: z.object({
+    enabled: z.boolean(),
+    intervalMs: z.number().int().min(800).max(5000),
+    welcomeName: z.string().trim().min(2).max(100),
+    welcomeTitle: z.string().trim().min(2).max(100),
+    welcomeMessage: z.string().trim().min(2).max(200),
+  }),
+});
+
 export interface BucketUploadPolicy {
   bucket: StorageBucketName;
   maxSizeBytes: number;
