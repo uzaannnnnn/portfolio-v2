@@ -13,6 +13,10 @@ import {
   INITIAL_SITE_SETTINGS,
   INITIAL_SKILL_CATEGORIES,
 } from "@/lib/database/fixtures";
+import {
+  SupabaseConnectionError,
+  getRequiredSupabasePublicEnv,
+} from "@/lib/supabase/errors";
 import type {
   AboutContent,
   ActiveResume,
@@ -171,86 +175,102 @@ export class FixturePortfolioRepository implements PortfolioDataRepository {
 
 /**
  * Production Supabase PostgreSQL adapter.
- * Never falls back silently to local fixtures: if credentials are missing or a database error occurs,
- * it throws an explicit error so operational issues are immediately visible.
+ * Never falls back silently to local fixtures:
+ * - Throws SupabaseConfigurationError when environment variables are missing or invalid.
+ * - Throws SupabaseConnectionError when database queries or network connections fail.
  */
 export class SupabasePortfolioRepository implements PortfolioDataRepository {
-  private getClient() {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  constructor(private readonly clientFactory?: () => ReturnType<typeof createClient>) {}
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error(
-        "SupabasePortfolioRepository error: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be configured when DATA_ADAPTER_MODE=supabase.",
-      );
+  private getClient() {
+    const { url, anonKey } = getRequiredSupabasePublicEnv();
+    if (this.clientFactory) {
+      return this.clientFactory();
     }
 
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false },
+    return createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
   }
 
   async getPublicPortfolioBundle(): Promise<PublicPortfolioBundle> {
     const client = this.getClient();
 
-    const [
-      singletonRes,
-      categoriesRes,
-      projectsRes,
-      experiencesRes,
-      educationsRes,
-      certificationsRes,
-      notesRes,
-      greetingsRes,
-      resumeRes,
-    ] = await Promise.all([
-      client
-        .from("singleton_configs")
-        .select("key, published_data")
-        .eq("status", "published"),
-      client
-        .from("skill_categories")
-        .select("id, name, slug, description, display_order, is_enabled, skills(id, category_id, name, proficiency, is_enabled, display_order, status)")
-        .eq("is_enabled", true)
-        .order("display_order", { ascending: true }),
-      client
-        .from("projects")
-        .select("published_data")
-        .eq("status", "published")
-        .order("display_order", { ascending: true }),
-      client
-        .from("experiences")
-        .select("published_data")
-        .eq("status", "published")
-        .order("display_order", { ascending: true }),
-      client
-        .from("educations")
-        .select("published_data")
-        .eq("status", "published")
-        .order("display_order", { ascending: true }),
-      client
-        .from("certifications")
-        .select("published_data")
-        .eq("status", "published")
-        .order("display_order", { ascending: true }),
-      client
-        .from("notes")
-        .select("published_data")
-        .eq("status", "published")
-        .order("display_order", { ascending: true }),
-      client
-        .from("boot_greetings")
-        .select("id, language, greeting, meaning, is_enabled, display_order, status")
-        .eq("status", "published")
-        .eq("is_enabled", true)
-        .order("display_order", { ascending: true }),
-      client
-        .from("resume_files")
-        .select("id, version_label, file_name, file_url, published_at, summary_note, status")
-        .eq("status", "published")
-        .eq("is_active", true)
-        .maybeSingle(),
-    ]);
+    let singletonRes;
+    let categoriesRes;
+    let projectsRes;
+    let experiencesRes;
+    let educationsRes;
+    let certificationsRes;
+    let notesRes;
+    let greetingsRes;
+    let resumeRes;
+
+    try {
+      [
+        singletonRes,
+        categoriesRes,
+        projectsRes,
+        experiencesRes,
+        educationsRes,
+        certificationsRes,
+        notesRes,
+        greetingsRes,
+        resumeRes,
+      ] = await Promise.all([
+        client
+          .from("singleton_configs")
+          .select("key, published_data")
+          .eq("status", "published"),
+        client
+          .from("skill_categories")
+          .select("id, name, slug, description, display_order, is_enabled, skills(id, category_id, name, proficiency, is_enabled, display_order, status)")
+          .eq("is_enabled", true)
+          .order("display_order", { ascending: true }),
+        client
+          .from("projects")
+          .select("published_data")
+          .eq("status", "published")
+          .order("display_order", { ascending: true }),
+        client
+          .from("experiences")
+          .select("published_data")
+          .eq("status", "published")
+          .order("display_order", { ascending: true }),
+        client
+          .from("educations")
+          .select("published_data")
+          .eq("status", "published")
+          .order("display_order", { ascending: true }),
+        client
+          .from("certifications")
+          .select("published_data")
+          .eq("status", "published")
+          .order("display_order", { ascending: true }),
+        client
+          .from("notes")
+          .select("published_data")
+          .eq("status", "published")
+          .order("display_order", { ascending: true }),
+        client
+          .from("boot_greetings")
+          .select("id, language, greeting, meaning, is_enabled, display_order, status")
+          .eq("status", "published")
+          .eq("is_enabled", true)
+          .order("display_order", { ascending: true }),
+        client
+          .from("resume_files")
+          .select("id, version_label, file_name, file_url, published_at, summary_note, status")
+          .eq("status", "published")
+          .eq("is_active", true)
+          .maybeSingle(),
+      ]);
+    } catch (networkErr) {
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to reach Supabase PostgreSQL endpoint.`,
+        networkErr,
+      );
+    }
 
     const firstError =
       singletonRes.error ||
@@ -264,7 +284,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       resumeRes.error;
 
     if (firstError) {
-      throw new Error(`Supabase query failed: ${firstError.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: database query failed (${firstError.message}).`,
+        firstError,
+      );
     }
 
     const configMap = new Map<string, unknown>();
@@ -353,7 +376,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       .order("display_order", { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch published projects: ${error.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to fetch published projects (${error.message}).`,
+        error,
+      );
     }
 
     return (data ?? []).map((row) => row.published_data as ProjectSummary);
@@ -369,7 +395,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to fetch project by slug "${slug}": ${error.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to fetch project "${slug}" (${error.message}).`,
+        error,
+      );
     }
 
     return data ? (data.published_data as ProjectDetail) : null;
@@ -384,7 +413,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       .order("display_order", { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch published notes: ${error.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to fetch published notes (${error.message}).`,
+        error,
+      );
     }
 
     return (data ?? []).map((row) => row.published_data as EngineeringNote);
@@ -400,7 +432,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to fetch note by slug "${slug}": ${error.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to fetch note "${slug}" (${error.message}).`,
+        error,
+      );
     }
 
     return data ? (data.published_data as EngineeringNote) : null;
@@ -416,7 +451,10 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       .order("display_order", { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch boot greetings: ${error.message}`);
+      throw new SupabaseConnectionError(
+        `SupabaseConnectionError: failed to fetch boot greetings (${error.message}).`,
+        error,
+      );
     }
 
     return (data ?? []).map((g) => ({
