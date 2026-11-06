@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 export function AdminStatusBanner({
@@ -64,6 +64,17 @@ export function AdminConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   return (
@@ -72,6 +83,7 @@ export function AdminConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
+      aria-describedby="confirm-dialog-desc"
       data-testid="admin-confirm-dialog"
     >
       <div className="w-full max-w-md rounded-xl border border-border-token bg-background p-6">
@@ -81,7 +93,10 @@ export function AdminConfirmDialog({
         >
           {title}
         </h2>
-        <p className="mt-2 text-xs leading-relaxed text-secondary-foreground">
+        <p
+          id="confirm-dialog-desc"
+          className="mt-2 text-xs leading-relaxed text-secondary-foreground"
+        >
           {description}
         </p>
         <div className="mt-6 flex items-center justify-end gap-2.5">
