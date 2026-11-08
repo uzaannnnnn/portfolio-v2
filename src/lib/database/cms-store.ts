@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { VerifiedAdminContext } from "@/lib/auth/admin-guard";
 import {
   ContentPublishingEngine,
@@ -7,6 +8,10 @@ import {
   type RevisionRecord,
   type VersionedEntityRecord,
 } from "@/features/publishing/publishing-engine";
+import {
+  SupabasePublishingStore,
+  loadSupabaseDashboardSnapshot,
+} from "@/lib/database/supabase-cms-store";
 import {
   INITIAL_ABOUT,
   INITIAL_BOOT_GREETINGS,
@@ -324,7 +329,7 @@ class GlobalCmsMemoryStore implements PublishingStoreAdapter<unknown> {
     this.entities.delete(this.key(params.entityType, params.entityId));
     // Audit logs and revision records are intentionally preserved!
     this.auditLogs.unshift({
-      id: `audit-del-${Date.now()}`,
+      id: crypto.randomUUID(),
       actorId: params.admin.adminId,
       actorEmail: params.admin.email,
       action: "delete_entity",
@@ -347,11 +352,19 @@ export function getCmsStore(): GlobalCmsMemoryStore {
   return globalForCms.__mfCmsStore;
 }
 
+export function getPublishingStoreAdapter<T>(): PublishingStoreAdapter<T> {
+  const mode = process.env.DATA_ADAPTER_MODE ?? "fixture";
+  if (mode === "supabase") {
+    return new SupabasePublishingStore<T>();
+  }
+  return getCmsStore() as unknown as PublishingStoreAdapter<T>;
+}
+
 function createTypedEngine<T>(
   validateDraft: (data: T) => T,
   validatePublish: (data: T) => T = validateDraft,
 ) {
-  const store = getCmsStore() as unknown as PublishingStoreAdapter<T>;
+  const store = getPublishingStoreAdapter<T>();
   return new ContentPublishingEngine<T>(store, validateDraft, validatePublish, {
     revalidatePath: () => undefined,
     revalidateTag: () => undefined,
@@ -422,6 +435,14 @@ export function getAdminDashboardSnapshot(): CmsDashboardSnapshot {
   };
 }
 
+export async function resolveAdminDashboardSnapshot(): Promise<CmsDashboardSnapshot> {
+  const mode = process.env.DATA_ADAPTER_MODE ?? "fixture";
+  if (mode === "supabase") {
+    return loadSupabaseDashboardSnapshot();
+  }
+  return getAdminDashboardSnapshot();
+}
+
 /**
  * Uploads a validated media asset and records an audit entry.
  * Prevents deletion if referenced by any published project, certification, or note.
@@ -433,9 +454,10 @@ export function registerMediaAssetInStore(params: {
   const validated = validateMediaUpload(params.candidate);
   const store = getCmsStore();
   const now = new Date().toISOString();
+  const id = crypto.randomUUID();
 
   const record: MediaAssetRecord = {
-    id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id,
     bucket: validated.bucket,
     storagePath: validated.storagePath,
     publicUrl: validated.isPublic
@@ -451,7 +473,7 @@ export function registerMediaAssetInStore(params: {
 
   store.mediaAssets.unshift(record);
   store.auditLogs.unshift({
-    id: `audit-media-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "upload_media",
@@ -507,7 +529,7 @@ export function deleteMediaAssetFromStore(params: {
 
   store.mediaAssets = store.mediaAssets.filter((m) => m.id !== params.mediaId);
   store.auditLogs.unshift({
-    id: `audit-media-del-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "delete_media",
@@ -538,8 +560,9 @@ export function uploadResumeVersionToStore(params: {
 
   const store = getCmsStore();
   const now = new Date().toISOString();
+  const id = crypto.randomUUID();
   const record: ResumeFileRecord = {
-    id: `resume-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id,
     versionLabel: params.versionLabel.trim() || "v1.0",
     fileName: validated.sanitizedFileName,
     storagePath: validated.storagePath,
@@ -553,7 +576,7 @@ export function uploadResumeVersionToStore(params: {
 
   store.resumeFiles.unshift(record);
   store.auditLogs.unshift({
-    id: `audit-resume-up-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "upload_resume_draft",
@@ -600,7 +623,7 @@ export function setActivePublishedResumeInStore(params: {
 
   const updated = store.resumeFiles.find((r) => r.id === params.resumeId)!;
   store.auditLogs.unshift({
-    id: `audit-resume-pub-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "publish_active_resume",
@@ -624,7 +647,7 @@ export function deleteResumeFromStore(params: {
   }
   store.resumeFiles = store.resumeFiles.filter((r) => r.id !== params.resumeId);
   store.auditLogs.unshift({
-    id: `audit-resume-del-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "delete_resume",
@@ -648,7 +671,7 @@ export function saveSkillCategoryInStore(params: {
     store.skillCategories.push(validated);
   }
   store.auditLogs.unshift({
-    id: `audit-skill-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "save_skill_category",
@@ -669,7 +692,7 @@ export function deleteSkillCategoryFromStore(params: {
     (c) => c.id !== params.categoryId,
   );
   store.auditLogs.unshift({
-    id: `audit-skill-del-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "delete_skill_category",
@@ -693,7 +716,7 @@ export function saveBootGreetingInStore(params: {
     store.bootGreetings.push(validated);
   }
   store.auditLogs.unshift({
-    id: `audit-greeting-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "save_boot_greeting",
@@ -714,7 +737,7 @@ export function deleteBootGreetingFromStore(params: {
     (g) => g.id !== params.greetingId,
   );
   store.auditLogs.unshift({
-    id: `audit-greeting-del-${Date.now()}`,
+    id: crypto.randomUUID(),
     actorId: params.admin.adminId,
     actorEmail: params.admin.email,
     action: "delete_boot_greeting",
@@ -724,3 +747,21 @@ export function deleteBootGreetingFromStore(params: {
     createdAt: new Date().toISOString(),
   });
 }
+
+export function deleteEntityPreservingHistory(params: {
+  admin: VerifiedAdminContext;
+  entityType: PublishableEntityType;
+  entityId: string;
+}): void {
+  getCmsStore().deleteEntityPreservingHistory(params);
+}
+
+export function recordAuditLog(entry: AuditLogEntry): void | Promise<void> {
+  if (process.env.DATA_ADAPTER_MODE === "supabase") {
+    const store = new SupabasePublishingStore();
+    return store.appendAuditLog(entry);
+  }
+  getCmsStore().auditLogs.unshift(entry);
+}
+
+

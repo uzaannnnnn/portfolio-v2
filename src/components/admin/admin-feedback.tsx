@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Globe } from "lucide-react";
+import type { LanguageCompleteness } from "@/lib/i18n/localization";
+import type { LanguagePreference } from "@/types/portfolio";
 
 export function AdminStatusBanner({
   status,
@@ -147,5 +149,131 @@ export function AdminPageHeader({
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
     </div>
+  );
+}
+
+export function AdminLanguageTabs({
+  activeLanguage,
+  onSelectLanguage,
+  completeness,
+  testIdPrefix = "cms",
+}: {
+  activeLanguage: LanguagePreference;
+  onSelectLanguage: (lang: LanguagePreference) => void;
+  completeness: LanguageCompleteness;
+  testIdPrefix?: string;
+}) {
+  return (
+    <div
+      data-testid={`${testIdPrefix}-language-bar`}
+      className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-token bg-surface/60 px-4 py-3"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          role="tablist"
+          aria-label="Content authoring language"
+          data-testid="cms-language-tabs"
+          className="inline-flex items-center rounded-lg border border-border-token bg-background p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeLanguage === "en"}
+            data-testid="cms-lang-tab-en"
+            onClick={() => onSelectLanguage("en")}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeLanguage === "en"
+                ? "bg-foreground text-background shadow-sm"
+                : "text-secondary-foreground hover:text-foreground"
+            }`}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeLanguage === "id"}
+            data-testid="cms-lang-tab-id"
+            onClick={() => onSelectLanguage("id")}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeLanguage === "id"
+                ? "bg-foreground text-background shadow-sm"
+                : "text-secondary-foreground hover:text-foreground"
+            }`}
+          >
+            Indonesia
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Globe className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span data-testid="cms-active-language-indicator">
+            Editing:{" "}
+            <strong className="font-semibold text-foreground">
+              {activeLanguage === "en"
+                ? "English (Primary — Required)"
+                : "Bahasa Indonesia (Manual — Optional)"}
+            </strong>
+          </span>
+        </div>
+      </div>
+
+      <div
+        data-testid="cms-completeness-status"
+        className="flex flex-wrap items-center gap-2 text-[11px] font-medium"
+      >
+        <span
+          data-testid="cms-en-completeness-badge"
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 ${
+            completeness.enComplete
+              ? "border-emerald-300 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-amber-300 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          }`}
+        >
+          {completeness.enLabel} ({completeness.filledEnCount}/{completeness.totalEnCount})
+        </span>
+        <span
+          data-testid="cms-id-completeness-badge"
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 ${
+            completeness.idComplete
+              ? "border-emerald-300 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-border-token bg-background text-muted-foreground"
+          }`}
+        >
+          {completeness.idLabel} ({completeness.filledIdCount}/{completeness.totalIdCount})
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function AdminCompletenessPills({
+  completeness,
+}: {
+  completeness: LanguageCompleteness;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-mono">
+      <span
+        title={completeness.enLabel}
+        className={`rounded px-1.5 py-0.5 ${
+          completeness.enComplete
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+        }`}
+      >
+        EN {completeness.enComplete ? "✓" : "!"}
+      </span>
+      <span
+        title={`${completeness.idLabel} (${completeness.filledIdCount}/${completeness.totalIdCount})`}
+        className={`rounded px-1.5 py-0.5 ${
+          completeness.idComplete
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "bg-surface text-muted-foreground border border-border-token"
+        }`}
+      >
+        ID {completeness.idComplete ? "✓" : `${completeness.filledIdCount}/${completeness.totalIdCount}`}
+      </span>
+    </span>
   );
 }

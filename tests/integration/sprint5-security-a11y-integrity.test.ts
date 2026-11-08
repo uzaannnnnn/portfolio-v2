@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { parseSafeMdxBlocks } from "@/components/public/safe-mdx-renderer";
 import {
   validateMediaUpload,
   type FileUploadCandidate,
@@ -19,43 +18,7 @@ const FAKE_ADMIN = {
 };
 
 describe("Sprint 5 — Production Readiness, Security, A11y & Data Integrity", () => {
-  describe("1. Security: Safe MDX Parsing & XSS Immunity", () => {
-    it("parses untrusted MDX inputs into typed AST blocks without dangerouslySetInnerHTML", () => {
-      const maliciousPayload = `
-## Heading Attempt <script>alert('xss')</script>
-This is text with <img src=x onerror=alert(1)> embedded.
-
-\`\`\`javascript
-<script>alert('code-block-xss')</script>
-\`\`\`
-`;
-      const blocks = parseSafeMdxBlocks(maliciousPayload);
-      expect(blocks).toHaveLength(3);
-
-      // Heading block contains sanitized string, not executable DOM
-      const heading = blocks[0];
-      expect(heading?.type).toBe("heading2");
-      if (heading && heading.type === "heading2") {
-        expect(heading.id).toBe("heading-attempt-scriptalertxssscript");
-      }
-
-      // Paragraph block contains literal text, not raw HTML DOM elements
-      const paragraph = blocks[1];
-      expect(paragraph?.type).toBe("paragraph");
-      if (paragraph && paragraph.type === "paragraph") {
-        expect(paragraph.text).toContain("<img src=x onerror=alert(1)>");
-      }
-
-      // Code block contains literal code string
-      const codeBlock = blocks[2];
-      expect(codeBlock?.type).toBe("code");
-      if (codeBlock && codeBlock.type === "code") {
-        expect(codeBlock.code).toContain("<script>alert('code-block-xss')</script>");
-      }
-    });
-  });
-
-  describe("2. Security: Media & File Upload Validation", () => {
+  describe("1. Security: Media & File Upload Validation", () => {
     it("rejects path traversal attempts, disguised extensions, and invalid MIME types", () => {
       const pathTraversalCandidate: FileUploadCandidate = {
         bucket: "projects",

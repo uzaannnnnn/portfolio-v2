@@ -1,8 +1,8 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { SettingsAndAuditManager } from "@/components/admin/system-managers";
 
-export default function AdminSettingsPage() {
-  const snapshot = getAdminDashboardSnapshot();
+export default async function AdminSettingsPage() {
+  const snapshot = await resolveAdminDashboardSnapshot();
   return (
     <SettingsAndAuditManager
       siteSettingsEntity={snapshot.siteSettings}

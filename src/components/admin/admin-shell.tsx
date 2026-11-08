@@ -5,25 +5,20 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Award,
-  BookOpen,
   Briefcase,
   ChevronRight,
-  Cpu,
   ExternalLink,
   FileSpreadsheet,
-  FileText,
   FolderGit2,
-  GraduationCap,
-  Image as ImageIcon,
   LayoutDashboard,
   LogOut,
   Menu,
   Settings,
-  Sparkles,
   User,
   X,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/admin/actions";
+import { ThemeSwitcher } from "@/components/theme/theme-switcher";
 
 interface NavItem {
   label: string;
@@ -42,28 +37,17 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
     title: "CONTENT MANAGEMENT",
     items: [
       { label: "Profile", href: "/admin/profile", icon: User },
-      { label: "Hero", href: "/admin/hero", icon: Sparkles },
-      { label: "About", href: "/admin/about", icon: BookOpen },
-      { label: "Skills", href: "/admin/skills", icon: Cpu },
-      { label: "Projects", href: "/admin/projects", icon: FolderGit2 },
       { label: "Experience", href: "/admin/experience", icon: Briefcase },
-      { label: "Education", href: "/admin/education", icon: GraduationCap },
+      { label: "Projects / Showcase", href: "/admin/projects", icon: FolderGit2 },
       { label: "Certifications", href: "/admin/certifications", icon: Award },
-      { label: "Engineering Notes", href: "/admin/notes", icon: FileText },
     ],
   },
   {
     title: "EXPERIENCE & SETTINGS",
     items: [
-      {
-        label: "Boot Experience",
-        href: "/admin/boot-experience",
-        icon: Sparkles,
-      },
-      { label: "Media Library", href: "/admin/media", icon: ImageIcon },
       { label: "Resume Manager", href: "/admin/resume", icon: FileSpreadsheet },
       {
-        label: "Settings & Audit Logs",
+        label: "Site Settings",
         href: "/admin/settings",
         icon: Settings,
       },
@@ -150,6 +134,10 @@ export function AdminShell({
         </nav>
 
         <div className="border-t border-border-token p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Theme</span>
+            <ThemeSwitcher compact />
+          </div>
           <p
             className="truncate font-mono text-[11px] text-secondary-foreground"
             title={adminEmail}
@@ -239,7 +227,11 @@ export function AdminShell({
                 </div>
               ))}
             </nav>
-            <div className="border-t border-border-token p-4">
+            <div className="border-t border-border-token p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Theme</span>
+                <ThemeSwitcher compact />
+              </div>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -281,6 +273,7 @@ export function AdminShell({
           </div>
 
           <div className="flex items-center gap-3">
+            <ThemeSwitcher />
             <span className="hidden font-mono text-xs text-muted-foreground sm:inline">
               Single-Admin Enforced
             </span>

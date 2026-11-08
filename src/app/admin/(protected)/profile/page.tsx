@@ -1,12 +1,23 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
-import { ProfileEditor } from "@/components/admin/singleton-editors";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { UnifiedProfileManager } from "@/components/admin/singleton-editors";
 
-export default function AdminProfilePage() {
-  const snapshot = getAdminDashboardSnapshot();
-  const profileRevisions = snapshot.revisions.filter(
-    (r) => r.entityType === "profile",
-  );
+export default async function AdminProfilePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
+  const snapshot = await resolveAdminDashboardSnapshot();
+  const params = searchParams ? await searchParams : {};
+  const initialTab = params.tab || "identity";
+
   return (
-    <ProfileEditor entity={snapshot.profile} revisions={profileRevisions} />
+    <UnifiedProfileManager
+      profileEntity={snapshot.profile}
+      heroEntity={snapshot.hero}
+      aboutEntity={snapshot.about}
+      educationItems={snapshot.educations}
+      revisions={snapshot.revisions}
+      initialTab={initialTab}
+    />
   );
 }

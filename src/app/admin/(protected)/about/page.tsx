@@ -1,7 +1,5 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
-import { AboutEditor } from "@/components/admin/singleton-editors";
+import { redirect } from "next/navigation";
 
 export default function AdminAboutPage() {
-  const snapshot = getAdminDashboardSnapshot();
-  return <AboutEditor entity={snapshot.about} />;
+  redirect("/admin/profile?tab=about");
 }

@@ -269,7 +269,7 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
           .eq("status", "published"),
         client
           .from("skill_categories")
-          .select("id, name, slug, description, display_order, is_enabled, skills(id, category_id, name, proficiency, is_enabled, display_order, status)")
+          .select("*, skills(id, category_id, name, proficiency, is_enabled, display_order, status)")
           .eq("is_enabled", true)
           .order("display_order", { ascending: true }),
         client
@@ -299,7 +299,7 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
           .order("display_order", { ascending: true }),
         client
           .from("boot_greetings")
-          .select("id, language, greeting, meaning, is_enabled, display_order, status")
+          .select("*")
           .eq("status", "published")
           .eq("is_enabled", true)
           .order("display_order", { ascending: true }),
@@ -346,28 +346,33 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
     const hero = (configMap.get("hero_content") as HeroContent | undefined) ?? INITIAL_HERO;
     const about = (configMap.get("about_content") as AboutContent | undefined) ?? INITIAL_ABOUT;
 
-    const skillCategories: SkillCategory[] = (categoriesRes.data ?? []).map((cat) => ({
-      id: String(cat.id),
-      name: String(cat.name),
-      slug: String(cat.slug),
-      description: String(cat.description ?? ""),
-      displayOrder: Number(cat.display_order ?? 0),
-      isEnabled: Boolean(cat.is_enabled),
-      skills: Array.isArray(cat.skills)
-        ? cat.skills
-            .filter((s) => Boolean(s.is_enabled) && s.status === "published")
-            .map((s) => ({
-              id: String(s.id),
-              categoryId: String(s.category_id),
-              name: String(s.name),
-              proficiency: s.proficiency as SkillCategory["skills"][number]["proficiency"],
-              isEnabled: Boolean(s.is_enabled),
-              displayOrder: Number(s.display_order ?? 0),
-              status: "published" as const,
-            }))
-            .sort((a, b) => a.displayOrder - b.displayOrder)
-        : [],
-    }));
+    const skillCategories: SkillCategory[] = (categoriesRes.data ?? []).map((cat) => {
+      const rec = cat as Record<string, unknown>;
+      return {
+        id: String(cat.id),
+        name: String(cat.name),
+        nameId: rec.name_id ? String(rec.name_id) : undefined,
+        slug: String(cat.slug),
+        description: String(cat.description ?? ""),
+        descriptionId: rec.description_id ? String(rec.description_id) : undefined,
+        displayOrder: Number(cat.display_order ?? 0),
+        isEnabled: Boolean(cat.is_enabled),
+        skills: Array.isArray(cat.skills)
+          ? (cat.skills as Array<Record<string, unknown>>)
+              .filter((s) => Boolean(s.is_enabled) && s.status === "published")
+              .map((s) => ({
+                id: String(s.id),
+                categoryId: String(s.category_id),
+                name: String(s.name),
+                proficiency: s.proficiency as SkillCategory["skills"][number]["proficiency"],
+                isEnabled: Boolean(s.is_enabled),
+                displayOrder: Number(s.display_order ?? 0),
+                status: "published" as const,
+              }))
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+          : [],
+      };
+    });
 
     const allPublishedProjects: ProjectSummary[] = (projectsRes.data ?? []).map(
       (row) => row.published_data as ProjectSummary,
@@ -389,15 +394,21 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
         (r) => r.published_data as CertificationItem,
       ),
       notes: (notesRes.data ?? []).map((r) => r.published_data as EngineeringNote),
-      bootGreetings: (greetingsRes.data ?? []).map((g) => ({
-        id: String(g.id),
-        language: String(g.language),
-        greeting: String(g.greeting),
-        meaning: String(g.meaning),
-        isEnabled: Boolean(g.is_enabled),
-        displayOrder: Number(g.display_order ?? 0),
-        status: "published" as const,
-      })),
+      bootGreetings: (greetingsRes.data ?? []).map((g) => {
+        const rec = g as Record<string, unknown>;
+        return {
+          id: String(rec.id),
+          language: String(rec.language),
+          greeting: String(rec.greeting),
+          meaning: String(rec.meaning),
+          meaningId: rec.meaning_id ? String(rec.meaning_id) : undefined,
+          regionNote: rec.region_note ? String(rec.region_note) : undefined,
+          regionNoteId: rec.region_note_id ? String(rec.region_note_id) : undefined,
+          isEnabled: Boolean(rec.is_enabled),
+          displayOrder: Number(rec.display_order ?? 0),
+          status: "published" as const,
+        };
+      }),
       activeResume: resumeRes.data
         ? {
             id: String(resumeRes.data.id),
@@ -490,7 +501,7 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
     const client = this.getClient();
     const { data, error } = await client
       .from("boot_greetings")
-      .select("id, language, greeting, meaning, is_enabled, display_order, status")
+      .select("*")
       .eq("status", "published")
       .eq("is_enabled", true)
       .order("display_order", { ascending: true });
@@ -502,15 +513,21 @@ export class SupabasePortfolioRepository implements PortfolioDataRepository {
       );
     }
 
-    return (data ?? []).map((g) => ({
-      id: String(g.id),
-      language: String(g.language),
-      greeting: String(g.greeting),
-      meaning: String(g.meaning),
-      isEnabled: Boolean(g.is_enabled),
-      displayOrder: Number(g.display_order ?? 0),
-      status: "published" as const,
-    }));
+    return (data ?? []).map((g) => {
+      const rec = g as Record<string, unknown>;
+      return {
+        id: String(rec.id),
+        language: String(rec.language),
+        greeting: String(rec.greeting),
+        meaning: String(rec.meaning),
+        meaningId: rec.meaning_id ? String(rec.meaning_id) : undefined,
+        regionNote: rec.region_note ? String(rec.region_note) : undefined,
+        regionNoteId: rec.region_note_id ? String(rec.region_note_id) : undefined,
+        isEnabled: Boolean(rec.is_enabled),
+        displayOrder: Number(rec.display_order ?? 0),
+        status: "published" as const,
+      };
+    });
   }
 }
 

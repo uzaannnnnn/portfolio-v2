@@ -1,7 +1,5 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
-import { HeroEditor } from "@/components/admin/singleton-editors";
+import { redirect } from "next/navigation";
 
 export default function AdminHeroPage() {
-  const snapshot = getAdminDashboardSnapshot();
-  return <HeroEditor entity={snapshot.hero} />;
+  redirect("/admin/profile?tab=hero");
 }

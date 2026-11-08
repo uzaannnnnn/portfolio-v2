@@ -1,7 +1,7 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { ResumeManager } from "@/components/admin/system-managers";
 
-export default function AdminResumePage() {
-  const snapshot = getAdminDashboardSnapshot();
+export default async function AdminResumePage() {
+  const snapshot = await resolveAdminDashboardSnapshot();
   return <ResumeManager resumes={snapshot.resumeFiles} />;
 }

@@ -1,7 +1,5 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
-import { EducationManager } from "@/components/admin/collection-managers";
+import { redirect } from "next/navigation";
 
 export default function AdminEducationPage() {
-  const snapshot = getAdminDashboardSnapshot();
-  return <EducationManager items={snapshot.educations} />;
+  redirect("/admin/profile?tab=education");
 }

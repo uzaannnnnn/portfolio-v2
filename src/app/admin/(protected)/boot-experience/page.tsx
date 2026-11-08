@@ -1,12 +1,5 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
-import { BootExperienceManager } from "@/components/admin/system-managers";
+import { redirect } from "next/navigation";
 
 export default function AdminBootExperiencePage() {
-  const snapshot = getAdminDashboardSnapshot();
-  return (
-    <BootExperienceManager
-      greetings={snapshot.bootGreetings}
-      siteSettingsEntity={snapshot.siteSettings}
-    />
-  );
+  redirect("/admin/settings?tab=boot");
 }

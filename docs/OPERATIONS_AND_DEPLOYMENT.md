@@ -15,9 +15,10 @@ Configure environment variables in Vercel or your hosting environment. Never com
 | `DATA_ADAPTER_MODE` | Server | **Yes** | Persistence mode: `"supabase"` (production source of truth) or `"fixture"` (local development/tests). |
 | `NEXT_PUBLIC_SUPABASE_URL` | Public (Client & Server) | **Yes** (when mode=supabase) | Supabase project HTTPS URL, e.g. `https://xyzproject.supabase.co`. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public (Client & Server) | **Yes** (when mode=supabase) | Supabase anonymous public API key. Protected by Row-Level Security (RLS). |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server-Only** | **Yes** | High-privilege secret key. Used exclusively server-side for admin session HMAC signing and administrative tasks. **Never prefix with `NEXT_PUBLIC_`**. |
+| `ADMIN_SESSION_SECRET` | **Server-Only** | **Yes** | Dedicated standalone secret for signing and verifying admin session HMAC tokens (minimum 32 characters). High entropy. No fallback. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server-Only** | **Yes** | High-privilege secret key. Used exclusively server-side for administrative provisioning and maintenance scripts. **Never prefix with `NEXT_PUBLIC_`**. |
 | `ADMIN_ALLOWED_EMAIL` | **Server-Only** | **Yes** | Authorized single-admin email address, e.g. `admin@muhamadfauzan.dev`. Provides server-side defense-in-depth alongside `public.admin_users`. |
-| `ADMIN_FIXTURE_PASSWORD` | Server (Dev/Test Only) | No | Default password used when `DATA_ADAPTER_MODE=fixture` for automated testing and local preview (`AdminPortfolio2026!`). |
+| `ADMIN_FIXTURE_PASSWORD` | Server (Dev/Test Only) | No | Default password used when `DATA_ADAPTER_MODE=fixture` for automated testing and local preview (`portfolio-admin-2026-secret`). |
 | `NEXT_PUBLIC_SITE_URL` | Public | **Yes** | Canonical production origin, e.g. `https://muhamadfauzan.dev`. Used for sitemap, robots, Open Graph, and JSON-LD structured data. |
 
 ---
@@ -43,10 +44,24 @@ Execute the migrations strictly in sequential order using the Supabase CLI or th
    - Restricts draft access, mutations, publications, and audit logs exclusively to verified administrators (`public.is_admin()`).
    - Configures Supabase Storage bucket access policies.
 
-3. **Seeding Initial Approved Fixtures:**  
+3. **Migration 00003 — Transactional Publishing & Unpublishing RPC:**  
+   Path: [`supabase/migrations/00003_transactional_publishing_rpc.sql`](file:///Users/zannho/Desktop/portfolio/supabase/migrations/00003_transactional_publishing_rpc.sql)  
+   - Creates `public.publish_entity` and `public.unpublish_entity` `SECURITY DEFINER` stored procedures.
+   - Executes atomic publish/unpublish transitions inside a single PostgreSQL transaction.
+   - Updates target entity table (`status`, `published_data`, `published_at`), inserts publication record into `content_publications`, and writes audit log to `audit_logs`.
+   - Validates draft exists and enforces `is_admin()` caller authorization.
+
+4. **Migration 00004 — Idempotency Unique Indexes:**  
+   Path: [`supabase/migrations/00004_idempotency_unique_indexes.sql`](file:///Users/zannho/Desktop/portfolio/supabase/migrations/00004_idempotency_unique_indexes.sql)  
+   - Creates `idx_boot_greetings_language_unique` on `public.boot_greetings (language)`.
+   - Creates `idx_skills_category_name_unique` on `public.skills (category_id, name)`.
+   - Guarantees database-level protection against accidental duplicates.
+
+5. **Seeding Initial Approved Fixtures:**  
    Path: [`supabase/seed.sql`](file:///Users/zannho/Desktop/portfolio/supabase/seed.sql)  
-   - Populates initial verified data.
+   - Populates initial verified data using deterministic static UUIDs and `ON CONFLICT DO NOTHING`.
    - Seeds `GeoEntity`, `ClayCV`, and `SPK Bansos SAW` strictly with `status = 'draft'` and `published_data = NULL` so they remain isolated from public routes until explicitly published.
+   - Seeds published site settings and profile pointing to `https://muhamadfauzan.dev`.
 
 ---
 

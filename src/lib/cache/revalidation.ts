@@ -14,6 +14,7 @@ export interface RevalidationExecutor {
 /**
  * Computes the exact Next.js cache paths and tags that must be invalidated
  * when an entity is published, unpublished, or archived.
+ * Single-page portfolio routes are strictly "/" and "/sitemap.xml".
  */
 export function buildCacheRevalidationPlan(params: {
   entityType: PublishableEntityType;
@@ -22,44 +23,8 @@ export function buildCacheRevalidationPlan(params: {
   const paths = new Set<string>(["/", "/sitemap.xml"]);
   const tags = new Set<string>(["portfolio-bundle", `entity:${params.entityType}`]);
 
-  switch (params.entityType) {
-    case "profile":
-    case "site_settings":
-    case "hero_content":
-    case "about_content":
-      paths.add("/about");
-      paths.add("/contact");
-      paths.add("/resume");
-      break;
-    case "project":
-      paths.add("/projects");
-      if (params.slug) {
-        paths.add(`/projects/${params.slug}`);
-        tags.add(`project:${params.slug}`);
-      }
-      break;
-    case "note":
-      paths.add("/notes");
-      if (params.slug) {
-        paths.add(`/notes/${params.slug}`);
-        tags.add(`note:${params.slug}`);
-      }
-      break;
-    case "skill_category":
-    case "skill":
-      paths.add("/about");
-      paths.add("/resume");
-      break;
-    case "experience":
-    case "education":
-    case "certification":
-      paths.add("/about");
-      break;
-    case "resume_file":
-      paths.add("/resume");
-      break;
-    case "boot_greeting":
-      break;
+  if (params.slug) {
+    tags.add(`${params.entityType}:${params.slug}`);
   }
 
   return {

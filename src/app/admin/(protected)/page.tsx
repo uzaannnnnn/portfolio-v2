@@ -4,18 +4,19 @@ import {
   Award,
   Briefcase,
   CheckCircle2,
-  Cpu,
   FileEdit,
+  FileSpreadsheet,
   FolderGit2,
   History,
   ShieldCheck,
 } from "lucide-react";
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { Badge } from "@/components/ui/badge";
-import { AdminPageHeader } from "@/components/admin/admin-feedback";
+import { AdminCompletenessPills, AdminPageHeader } from "@/components/admin/admin-feedback";
+import { getProjectCompleteness } from "@/lib/i18n/localization";
 
-export default function AdminOverviewPage() {
-  const snapshot = getAdminDashboardSnapshot();
+export default async function AdminOverviewPage() {
+  const snapshot = await resolveAdminDashboardSnapshot();
 
   const totalProjects = snapshot.projects.length;
   const publishedProjects = snapshot.projects.filter(
@@ -24,10 +25,10 @@ export default function AdminOverviewPage() {
   const draftProjects = snapshot.projects.filter(
     (p) => p.status === "draft",
   ).length;
-  const totalSkills = snapshot.skillCategories.reduce(
-    (sum, cat) => sum + cat.skills.length,
-    0,
-  );
+  const activeResume = snapshot.resumeFiles.find((r) => r.isActive);
+  const activeResumeLabel = activeResume
+    ? `${activeResume.fileName}`
+    : "No active PDF uploaded";
   const totalExperiences = snapshot.experiences.length;
   const totalCertifications = snapshot.certifications.length;
 
@@ -54,11 +55,11 @@ export default function AdminOverviewPage() {
       href: "/admin/projects",
     },
     {
-      label: "Total Skills",
-      value: totalSkills,
-      sub: `Across ${snapshot.skillCategories.length} categories`,
-      icon: Cpu,
-      href: "/admin/skills",
+      label: "Active Resume",
+      value: activeResume ? "Published" : "None",
+      sub: activeResumeLabel,
+      icon: FileSpreadsheet,
+      href: "/admin/resume",
     },
     {
       label: "Experience Entries",
@@ -142,14 +143,19 @@ export default function AdminOverviewPage() {
                   <th className="pb-2.5 pr-4">Slug</th>
                   <th className="pb-2.5 pr-4">State</th>
                   <th className="pb-2.5 pr-4">Sections</th>
-                  <th className="pb-2.5 text-right">Preview</th>
+                  <th className="pb-2.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-token">
                 {snapshot.projects.map((record) => (
                   <tr key={record.entityId}>
                     <td className="py-3 pr-4 font-medium text-foreground">
-                      {record.draftData.name}
+                      <div className="flex items-center gap-2">
+                        <span>{record.draftData.name}</span>
+                        <AdminCompletenessPills
+                          completeness={getProjectCompleteness(record.draftData)}
+                        />
+                      </div>
                     </td>
                     <td className="py-3 pr-4 font-mono text-secondary-foreground">
                       /{record.draftData.slug}
@@ -173,10 +179,10 @@ export default function AdminOverviewPage() {
                     </td>
                     <td className="py-3 text-right">
                       <Link
-                        href={`/projects/${record.draftData.slug}?preview=true`}
+                        href="/admin/projects"
                         className="font-mono text-xs text-accent hover:underline"
                       >
-                        Preview Draft →
+                        Manage →
                       </Link>
                     </td>
                   </tr>

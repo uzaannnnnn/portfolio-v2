@@ -377,7 +377,7 @@ CREATE POLICY "storage_resume_published_only_select"
     AND EXISTS (
       SELECT 1
       FROM public.resume_files rf
-      WHERE rf.storage_path = storage.objects.name
+      WHERE (rf.storage_path = storage.objects.name OR rf.storage_path = 'resume/' || storage.objects.name)
         AND rf.status = 'published'
         AND rf.is_active = TRUE
     )

@@ -12,16 +12,27 @@ import {
 import {
   cmsEngines,
   deleteBootGreetingFromStore,
+  deleteEntityPreservingHistory,
   deleteMediaAssetFromStore,
   deleteResumeFromStore,
-  deleteSkillCategoryFromStore,
   getCmsStore,
+  getPublishingStoreAdapter,
+  recordAuditLog,
   registerMediaAssetInStore,
   saveBootGreetingInStore,
-  saveSkillCategoryInStore,
   setActivePublishedResumeInStore,
   uploadResumeVersionToStore,
 } from "@/lib/database/cms-store";
+import {
+  supabaseDeleteBootGreeting,
+  supabaseDeleteEntityPreservingHistory,
+  supabaseDeleteMediaAsset,
+  supabaseDeleteResumeVersion,
+  supabaseRegisterMediaAsset,
+  supabaseSaveBootGreeting,
+  supabaseSetActivePublishedResume,
+  supabaseUploadResumeVersion,
+} from "@/lib/database/supabase-cms-store";
 import type { FileUploadCandidate } from "@/lib/validations/cms";
 import type { PublishableEntityType } from "@/types/database";
 import type {
@@ -29,13 +40,11 @@ import type {
   BootGreeting,
   CertificationItem,
   EducationItem,
-  EngineeringNote,
   ExperienceItem,
   HeroContent,
   ProfileData,
   ProjectDetail,
   SiteSettings,
-  SkillCategory,
 } from "@/types/portfolio";
 
 export interface ActionResponse<T = undefined> {
@@ -103,8 +112,8 @@ export async function loginAdminAction(params: {
       });
     }
 
-    getCmsStore().auditLogs.unshift({
-      id: `audit-login-${Date.now()}`,
+    await recordAuditLog({
+      id: crypto.randomUUID(),
       actorId: admin.adminId,
       actorEmail: admin.email,
       action: "admin_login",
@@ -381,8 +390,6 @@ export async function publishProjectAction(
     });
     safeRevalidate([
       "/",
-      "/projects",
-      `/projects/${res.entity.slug}`,
       "/sitemap.xml",
       "/admin",
       "/admin/projects",
@@ -403,7 +410,7 @@ export async function transitionProjectStateAction(params: {
 }): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    const res = await cmsEngines.project().transitionPublicationState({
+    await cmsEngines.project().transitionPublicationState({
       admin,
       entityType: "project",
       entityId: params.projectId,
@@ -411,8 +418,6 @@ export async function transitionProjectStateAction(params: {
     });
     safeRevalidate([
       "/",
-      "/projects",
-      `/projects/${res.entity.slug}`,
       "/sitemap.xml",
       "/admin",
       "/admin/projects",
@@ -434,52 +439,23 @@ export async function deleteProjectAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    getCmsStore().deleteEntityPreservingHistory({
-      admin,
-      entityType: "project",
-      entityId: projectId,
-    });
-    safeRevalidate(["/", "/projects", "/admin", "/admin/projects"]);
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteEntityPreservingHistory({
+        admin,
+        entityType: "project",
+        entityId: projectId,
+      });
+    } else {
+      deleteEntityPreservingHistory({
+        admin,
+        entityType: "project",
+        entityId: projectId,
+      });
+    }
+    safeRevalidate(["/", "/admin", "/admin/projects"]);
     return {
       ok: true,
       message: "Project deleted. Revision and audit history preserved.",
-    };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-// ============================================================================
-// SKILLS & CATEGORIES ACTIONS
-// ============================================================================
-
-export async function saveSkillCategoryAction(
-  category: SkillCategory,
-): Promise<ActionResponse<SkillCategory>> {
-  try {
-    const admin = await enforceAdminSession();
-    const saved = saveSkillCategoryInStore({ admin, category });
-    safeRevalidate(["/", "/admin", "/admin/skills"]);
-    return {
-      ok: true,
-      message: `Skill category "${saved.name}" saved.`,
-      data: saved,
-    };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-export async function deleteSkillCategoryAction(
-  categoryId: string,
-): Promise<ActionResponse> {
-  try {
-    const admin = await enforceAdminSession();
-    deleteSkillCategoryFromStore({ admin, categoryId });
-    safeRevalidate(["/", "/admin", "/admin/skills"]);
-    return {
-      ok: true,
-      message: "Skill category deleted.",
     };
   } catch (err) {
     return handleActionError(err);
@@ -562,11 +538,19 @@ export async function deleteExperienceAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    getCmsStore().deleteEntityPreservingHistory({
-      admin,
-      entityType: "experience",
-      entityId: experienceId,
-    });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteEntityPreservingHistory({
+        admin,
+        entityType: "experience",
+        entityId: experienceId,
+      });
+    } else {
+      deleteEntityPreservingHistory({
+        admin,
+        entityType: "experience",
+        entityId: experienceId,
+      });
+    }
     safeRevalidate(["/", "/admin", "/admin/experience"]);
     return { ok: true, message: "Experience deleted. Audit history preserved." };
   } catch (err) {
@@ -619,16 +603,46 @@ export async function publishEducationAction(
   }
 }
 
+export async function transitionEducationStateAction(params: {
+  educationId: string;
+  targetState: "draft" | "archived";
+}): Promise<ActionResponse> {
+  try {
+    const admin = await enforceAdminSession();
+    await cmsEngines.education().transitionPublicationState({
+      admin,
+      entityType: "education",
+      entityId: params.educationId,
+      targetState: params.targetState,
+    });
+    safeRevalidate(["/", "/admin", "/admin/education"]);
+    return {
+      ok: true,
+      message: `Education state updated to ${params.targetState}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
 export async function deleteEducationAction(
   educationId: string,
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    getCmsStore().deleteEntityPreservingHistory({
-      admin,
-      entityType: "education",
-      entityId: educationId,
-    });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteEntityPreservingHistory({
+        admin,
+        entityType: "education",
+        entityId: educationId,
+      });
+    } else {
+      deleteEntityPreservingHistory({
+        admin,
+        entityType: "education",
+        entityId: educationId,
+      });
+    }
     safeRevalidate(["/", "/admin", "/admin/education"]);
     return { ok: true, message: "Education deleted. Audit history preserved." };
   } catch (err) {
@@ -681,118 +695,51 @@ export async function publishCertificationAction(
   }
 }
 
+export async function transitionCertificationStateAction(params: {
+  certificationId: string;
+  targetState: "draft" | "archived";
+}): Promise<ActionResponse> {
+  try {
+    const admin = await enforceAdminSession();
+    await cmsEngines.certification().transitionPublicationState({
+      admin,
+      entityType: "certification",
+      entityId: params.certificationId,
+      targetState: params.targetState,
+    });
+    safeRevalidate(["/", "/admin", "/admin/certifications"]);
+    return {
+      ok: true,
+      message: `Certification state updated to ${params.targetState}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
 export async function deleteCertificationAction(
   certificationId: string,
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    getCmsStore().deleteEntityPreservingHistory({
-      admin,
-      entityType: "certification",
-      entityId: certificationId,
-    });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteEntityPreservingHistory({
+        admin,
+        entityType: "certification",
+        entityId: certificationId,
+      });
+    } else {
+      deleteEntityPreservingHistory({
+        admin,
+        entityType: "certification",
+        entityId: certificationId,
+      });
+    }
     safeRevalidate(["/", "/admin", "/admin/certifications"]);
     return {
       ok: true,
       message: "Certification deleted. Audit history preserved.",
     };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-export async function saveNoteDraftAction(
-  note: EngineeringNote,
-  changeSummary?: string,
-): Promise<ActionResponse<{ revisionId: string }>> {
-  try {
-    const admin = await enforceAdminSession();
-    const res = await cmsEngines.note().saveDraft({
-      admin,
-      entityType: "note",
-      entityId: note.id,
-      slug: note.slug,
-      draftPayload: note,
-      changeSummary,
-    });
-    safeRevalidate(["/admin", "/admin/notes"]);
-    return {
-      ok: true,
-      message: `Note draft "${note.title}" saved.`,
-      data: { revisionId: res.revision.id },
-    };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-export async function publishNoteAction(
-  noteId: string,
-): Promise<ActionResponse<{ revisionId: string }>> {
-  try {
-    const admin = await enforceAdminSession();
-    const res = await cmsEngines.note().publishDraft({
-      admin,
-      entityType: "note",
-      entityId: noteId,
-    });
-    safeRevalidate([
-      "/",
-      "/notes",
-      `/notes/${res.entity.slug}`,
-      "/sitemap.xml",
-      "/admin",
-      "/admin/notes",
-    ]);
-    return {
-      ok: true,
-      message: "Engineering Note published.",
-      data: { revisionId: res.revision.id },
-    };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-export async function transitionNoteStateAction(params: {
-  noteId: string;
-  targetState: "draft" | "archived";
-}): Promise<ActionResponse> {
-  try {
-    const admin = await enforceAdminSession();
-    const res = await cmsEngines.note().transitionPublicationState({
-      admin,
-      entityType: "note",
-      entityId: params.noteId,
-      targetState: params.targetState,
-    });
-    safeRevalidate([
-      "/",
-      "/notes",
-      `/notes/${res.entity.slug}`,
-      "/sitemap.xml",
-      "/admin",
-      "/admin/notes",
-    ]);
-    return {
-      ok: true,
-      message: `Note state transitioned to ${params.targetState}.`,
-    };
-  } catch (err) {
-    return handleActionError(err);
-  }
-}
-
-export async function deleteNoteAction(noteId: string): Promise<ActionResponse> {
-  try {
-    const admin = await enforceAdminSession();
-    getCmsStore().deleteEntityPreservingHistory({
-      admin,
-      entityType: "note",
-      entityId: noteId,
-    });
-    safeRevalidate(["/", "/notes", "/admin", "/admin/notes"]);
-    return { ok: true, message: "Note deleted. Audit history preserved." };
   } catch (err) {
     return handleActionError(err);
   }
@@ -807,7 +754,10 @@ export async function saveBootGreetingAction(
 ): Promise<ActionResponse<BootGreeting>> {
   try {
     const admin = await enforceAdminSession();
-    const saved = saveBootGreetingInStore({ admin, greeting });
+    const saved =
+      process.env.DATA_ADAPTER_MODE === "supabase"
+        ? await supabaseSaveBootGreeting({ admin, greeting })
+        : saveBootGreetingInStore({ admin, greeting });
     safeRevalidate(["/", "/admin", "/admin/boot-experience"]);
     return {
       ok: true,
@@ -824,7 +774,11 @@ export async function deleteBootGreetingAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    deleteBootGreetingFromStore({ admin, greetingId });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteBootGreeting({ admin, greetingId });
+    } else {
+      deleteBootGreetingFromStore({ admin, greetingId });
+    }
     safeRevalidate(["/", "/admin", "/admin/boot-experience"]);
     return { ok: true, message: "Regional greeting deleted." };
   } catch (err) {
@@ -841,7 +795,10 @@ export async function uploadMediaAssetAction(
 ): Promise<ActionResponse<{ id: string; publicUrl: string | null }>> {
   try {
     const admin = await enforceAdminSession();
-    const record = registerMediaAssetInStore({ admin, candidate });
+    const record =
+      process.env.DATA_ADAPTER_MODE === "supabase"
+        ? await supabaseRegisterMediaAsset({ admin, candidate })
+        : registerMediaAssetInStore({ admin, candidate });
     safeRevalidate(["/admin", "/admin/media"]);
     return {
       ok: true,
@@ -858,9 +815,54 @@ export async function deleteMediaAssetAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    deleteMediaAssetFromStore({ admin, mediaId });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteMediaAsset({ admin, mediaId });
+    } else {
+      deleteMediaAssetFromStore({ admin, mediaId });
+    }
     safeRevalidate(["/admin", "/admin/media"]);
     return { ok: true, message: "Media asset deleted." };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+export async function uploadAndActivateResumeAction(
+  formData: FormData,
+): Promise<ActionResponse<{ id: string; fileName: string }>> {
+  try {
+    const admin = await enforceAdminSession();
+    const file = formData.get("file");
+
+    if (!file || !(file instanceof Blob)) {
+      return { ok: false, message: "No PDF file provided in upload." };
+    }
+
+    const name =
+      file instanceof File
+        ? file.name
+        : (formData.get("fileName") as string) || "resume.pdf";
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const { uploadAndActivateResume } = await import(
+      "@/lib/resume/resume-service"
+    );
+    const record = await uploadAndActivateResume({
+      admin,
+      file: {
+        name,
+        size: file.size,
+        buffer,
+      },
+    });
+
+    safeRevalidate(["/", "/admin", "/admin/resume", "/api/resume/active"]);
+    return {
+      ok: true,
+      message: `Resume "${record.fileName}" uploaded and set as active published resume.`,
+      data: { id: record.id, fileName: record.fileName },
+    };
   } catch (err) {
     return handleActionError(err);
   }
@@ -875,7 +877,10 @@ export async function uploadResumeVersionAction(params: {
 }): Promise<ActionResponse<{ id: string }>> {
   try {
     const admin = await enforceAdminSession();
-    const record = uploadResumeVersionToStore({ admin, ...params });
+    const record =
+      process.env.DATA_ADAPTER_MODE === "supabase"
+        ? await supabaseUploadResumeVersion({ admin, ...params })
+        : uploadResumeVersionToStore({ admin, ...params });
     safeRevalidate(["/admin", "/admin/resume"]);
     return {
       ok: true,
@@ -892,7 +897,10 @@ export async function publishActiveResumeAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    const updated = setActivePublishedResumeInStore({ admin, resumeId });
+    const updated =
+      process.env.DATA_ADAPTER_MODE === "supabase"
+        ? await supabaseSetActivePublishedResume({ admin, resumeId })
+        : setActivePublishedResumeInStore({ admin, resumeId });
     safeRevalidate(["/", "/admin", "/admin/resume"]);
     return {
       ok: true,
@@ -908,7 +916,11 @@ export async function deleteResumeVersionAction(
 ): Promise<ActionResponse> {
   try {
     const admin = await enforceAdminSession();
-    deleteResumeFromStore({ admin, resumeId });
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      await supabaseDeleteResumeVersion({ admin, resumeId });
+    } else {
+      deleteResumeFromStore({ admin, resumeId });
+    }
     safeRevalidate(["/", "/admin", "/admin/resume"]);
     return { ok: true, message: "Resume version deleted." };
   } catch (err) {
@@ -929,7 +941,7 @@ export async function previewEntityDraftAction(params: {
 > {
   try {
     const admin = await enforceAdminSession();
-    const store = getCmsStore();
+    const store = getPublishingStoreAdapter();
     const engine = cmsEngines.project(); // Generic preview reader
     const entity = await store.getEntity(params.entityType, params.entityId);
     if (!entity) {
@@ -958,8 +970,15 @@ export async function previewEntityDraftAction(params: {
 export async function resetCmsStoreToDefaultsAction(): Promise<ActionResponse> {
   try {
     await enforceAdminSession();
+    if (process.env.DATA_ADAPTER_MODE === "supabase") {
+      return {
+        ok: false,
+        message: "Reset store to fixtures is not supported in Supabase mode. Use seed.sql instead.",
+        statusCode: 400,
+      };
+    }
     getCmsStore().resetToDefaults();
-    safeRevalidate(["/", "/projects", "/notes", "/admin"]);
+    safeRevalidate(["/", "/admin"]);
     return {
       ok: true,
       message: "CMS store reset to default initial fixtures.",

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { VerifiedAdminContext } from "@/lib/auth/admin-guard";
 import {
   buildCacheRevalidationPlan,
@@ -66,6 +67,23 @@ export interface PublishingStoreAdapter<T = unknown> {
   appendRevision(revision: RevisionRecord<T>): Promise<void>;
   appendPublication(publication: PublicationRecord): Promise<void>;
   appendAuditLog(entry: AuditLogEntry): Promise<void>;
+  publishTransaction?(params: {
+    entityType: PublishableEntityType;
+    entityId: string;
+    revisionId: string;
+    versionNumber: number;
+    snapshot: T;
+    changeSummary?: string;
+    actorId?: string;
+    actorEmail?: string;
+  }): Promise<boolean>;
+  unpublishTransaction?(params: {
+    entityType: PublishableEntityType;
+    entityId: string;
+    targetState: "draft" | "archived";
+    actorId?: string;
+    actorEmail?: string;
+  }): Promise<boolean>;
 }
 
 /**
@@ -106,7 +124,7 @@ export class ContentPublishingEngine<T> {
     const nextVersion =
       existingRevisions.reduce((max, r) => Math.max(max, r.versionNumber), 0) + 1;
     const now = new Date().toISOString();
-    const revisionId = `rev-${params.entityType}-${params.entityId}-v${nextVersion}`;
+    const revisionId = crypto.randomUUID();
 
     const revision: RevisionRecord<T> = {
       id: revisionId,
@@ -242,7 +260,7 @@ export class ContentPublishingEngine<T> {
     const nextVersion =
       existingRevisions.reduce((max, r) => Math.max(max, r.versionNumber), 0) + 1;
     const now = new Date().toISOString();
-    const publishedRevisionId = `rev-${params.entityType}-${params.entityId}-v${nextVersion}-pub`;
+    const publishedRevisionId = crypto.randomUUID();
 
     const publishedSnapshot = {
       ...validatedPublishPayload,
@@ -272,30 +290,46 @@ export class ContentPublishingEngine<T> {
       updatedAt: now,
     };
 
-    await this.store.appendRevision(revision);
-    await this.store.saveEntity(updatedEntity);
-    await this.store.appendPublication({
-      id: `pub-${Date.now()}-${nextVersion}`,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      revisionId: publishedRevisionId,
-      action: "publish",
-      publishedBy: params.admin.adminId,
-      publishedAt: now,
-    });
-    await this.store.appendAuditLog({
-      id: `audit-${Date.now()}-${nextVersion}`,
-      actorId: params.admin.adminId,
-      actorEmail: params.admin.email,
-      action: "publish_content",
-      entityType: params.entityType,
-      entityId: params.entityId,
-      metadata: {
-        publishedRevisionId,
+    let transactionHandled = false;
+    if (this.store.publishTransaction) {
+      transactionHandled = await this.store.publishTransaction({
+        entityType: params.entityType,
+        entityId: params.entityId,
+        revisionId: publishedRevisionId,
         versionNumber: nextVersion,
-      },
-      createdAt: now,
-    });
+        snapshot: publishedSnapshot,
+        changeSummary: params.changeSummary,
+        actorId: params.admin.adminId,
+        actorEmail: params.admin.email,
+      });
+    }
+
+    if (!transactionHandled) {
+      await this.store.appendRevision(revision);
+      await this.store.saveEntity(updatedEntity);
+      await this.store.appendPublication({
+        id: crypto.randomUUID(),
+        entityType: params.entityType,
+        entityId: params.entityId,
+        revisionId: publishedRevisionId,
+        action: "publish",
+        publishedBy: params.admin.adminId,
+        publishedAt: now,
+      });
+      await this.store.appendAuditLog({
+        id: crypto.randomUUID(),
+        actorId: params.admin.adminId,
+        actorEmail: params.admin.email,
+        action: "publish_content",
+        entityType: params.entityType,
+        entityId: params.entityId,
+        metadata: {
+          publishedRevisionId,
+          versionNumber: nextVersion,
+        },
+        createdAt: now,
+      });
+    }
 
     const plan = buildCacheRevalidationPlan({
       entityType: params.entityType,
@@ -338,26 +372,39 @@ export class ContentPublishingEngine<T> {
       updatedAt: now,
     };
 
-    await this.store.saveEntity(updatedEntity);
-    await this.store.appendPublication({
-      id: `pub-${Date.now()}`,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      revisionId: existing.publishedRevisionId,
-      action: params.targetState === "archived" ? "archive" : "unpublish",
-      publishedBy: params.admin.adminId,
-      publishedAt: now,
-    });
-    await this.store.appendAuditLog({
-      id: `audit-${Date.now()}`,
-      actorId: params.admin.adminId,
-      actorEmail: params.admin.email,
-      action: params.targetState === "archived" ? "archive_content" : "unpublish_content",
-      entityType: params.entityType,
-      entityId: params.entityId,
-      metadata: { previousStatus: existing.status },
-      createdAt: now,
-    });
+    let transactionHandled = false;
+    if (this.store.unpublishTransaction) {
+      transactionHandled = await this.store.unpublishTransaction({
+        entityType: params.entityType,
+        entityId: params.entityId,
+        targetState: params.targetState,
+        actorId: params.admin.adminId,
+        actorEmail: params.admin.email,
+      });
+    }
+
+    if (!transactionHandled) {
+      await this.store.saveEntity(updatedEntity);
+      await this.store.appendPublication({
+        id: crypto.randomUUID(),
+        entityType: params.entityType,
+        entityId: params.entityId,
+        revisionId: existing.publishedRevisionId,
+        action: params.targetState === "archived" ? "archive" : "unpublish",
+        publishedBy: params.admin.adminId,
+        publishedAt: now,
+      });
+      await this.store.appendAuditLog({
+        id: crypto.randomUUID(),
+        actorId: params.admin.adminId,
+        actorEmail: params.admin.email,
+        action: params.targetState === "archived" ? "archive_content" : "unpublish_content",
+        entityType: params.entityType,
+        entityId: params.entityId,
+        metadata: { previousStatus: existing.status },
+        createdAt: now,
+      });
+    }
 
     const plan = buildCacheRevalidationPlan({
       entityType: params.entityType,

@@ -1,29 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   Download,
   FileText,
+  FileUp,
   History,
-  Image as ImageIcon,
+  Loader2,
   Plus,
-  Search,
   ShieldCheck,
   Trash2,
-  Upload,
 } from "lucide-react";
 import {
   deleteBootGreetingAction,
-  deleteMediaAssetAction,
   deleteResumeVersionAction,
-  publishActiveResumeAction,
   publishSiteSettingsAction,
   saveBootGreetingAction,
   saveSiteSettingsDraftAction,
-  uploadMediaAssetAction,
-  uploadResumeVersionAction,
 } from "@/features/admin/actions";
 import type {
   AuditLogEntry,
@@ -31,19 +26,23 @@ import type {
   RevisionRecord,
   VersionedEntityRecord,
 } from "@/features/publishing/publishing-engine";
-import type {
-  MediaAssetRecord,
-  ResumeFileRecord,
-} from "@/lib/database/cms-store";
-import type { StorageBucketName } from "@/types/database";
-import type { BootGreeting, SiteSettings } from "@/types/portfolio";
+import type { ResumeFileRecord } from "@/lib/database/cms-store";
+import type { BootGreeting, LanguagePreference, SiteSettings } from "@/types/portfolio";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AdminCompletenessPills,
   AdminConfirmDialog,
+  AdminLanguageTabs,
   AdminPageHeader,
   AdminStatusBanner,
 } from "@/components/admin/admin-feedback";
+import {
+  buildCompleteness,
+  getBootGreetingCompleteness,
+  getSiteSettingsCompleteness,
+  hasText,
+} from "@/lib/i18n/localization";
 
 export function BootExperienceManager({
   greetings,
@@ -53,21 +52,32 @@ export function BootExperienceManager({
   siteSettingsEntity: VersionedEntityRecord<SiteSettings>;
 }) {
   const router = useRouter();
-  const [welcomeForm, setWelcomeForm] = useState(
-    siteSettingsEntity.draftData.bootWelcome,
+  const [welcomeForm, setWelcomeForm] = useState(siteSettingsEntity.draftData.bootWelcome);
+  const [activeLanguage, setActiveLanguage] = useState<LanguagePreference>("en");
+
+  const welcomeCompleteness = buildCompleteness(
+    [
+      hasText(welcomeForm.welcomeTitle),
+      hasText(welcomeForm.welcomeMessage),
+    ],
+    [
+      hasText(welcomeForm.welcomeTitleId),
+      hasText(welcomeForm.welcomeMessageId),
+    ],
   );
   const [newGreeting, setNewGreeting] = useState<BootGreeting>({
     id: `greet-${Date.now()}`,
     language: "",
     greeting: "",
     meaning: "Welcome",
+    meaningId: "Selamat Datang",
+    regionNote: "",
+    regionNoteId: "",
     isEnabled: true,
     displayOrder: greetings.length + 1,
     status: "published",
   });
-  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function handleSaveWelcomeConfig() {
@@ -114,6 +124,7 @@ export function BootExperienceManager({
         language: "",
         greeting: "",
         meaning: "Welcome",
+        regionNote: "",
         isEnabled: true,
         displayOrder: greetings.length + 2,
         status: "published",
@@ -143,16 +154,20 @@ export function BootExperienceManager({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Welcome Screen Configuration */}
         <div className="space-y-4 rounded-xl border border-border-token bg-background p-6">
-          <h2 className="text-sm font-semibold text-foreground">
-            Welcome Screen Configuration
-          </h2>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Welcome Screen Configuration</h2>
+            <AdminLanguageTabs
+              activeLanguage={activeLanguage}
+              onSelectLanguage={setActiveLanguage}
+              completeness={welcomeCompleteness}
+              testIdPrefix="boot-welcome"
+            />
+          </div>
           <label className="inline-flex items-center gap-2 text-xs font-medium text-foreground">
             <input
               type="checkbox"
               checked={welcomeForm.enabled}
-              onChange={(e) =>
-                setWelcomeForm({ ...welcomeForm, enabled: e.target.checked })
-              }
+              onChange={(e) => setWelcomeForm({ ...welcomeForm, enabled: e.target.checked })}
             />
             <span>Enable First-Visit Boot Experience</span>
           </label>
@@ -178,27 +193,74 @@ export function BootExperienceManager({
 
           <div>
             <label className="block text-xs font-medium text-foreground">
-              Welcome Message
+              {activeLanguage === "en" ? "Welcome Title (EN)" : "Welcome Title (ID)"}
             </label>
-            <input
-              type="text"
-              value={welcomeForm.welcomeMessage}
-              onChange={(e) =>
-                setWelcomeForm({
-                  ...welcomeForm,
-                  welcomeMessage: e.target.value,
-                })
-              }
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
-            />
+            {activeLanguage === "en" ? (
+              <input
+                type="text"
+                data-testid="boot-welcome-title-en-input"
+                value={welcomeForm.welcomeTitle ?? ""}
+                onChange={(e) =>
+                  setWelcomeForm({
+                    ...welcomeForm,
+                    welcomeTitle: e.target.value,
+                  })
+                }
+                placeholder="Welcome to my engineering portfolio"
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+              />
+            ) : (
+              <input
+                type="text"
+                data-testid="boot-welcome-title-id-input"
+                value={welcomeForm.welcomeTitleId ?? ""}
+                onChange={(e) =>
+                  setWelcomeForm({
+                    ...welcomeForm,
+                    welcomeTitleId: e.target.value,
+                  })
+                }
+                placeholder={welcomeForm.welcomeTitle || "Selamat datang di portofolio rekayasa saya"}
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+              />
+            )}
           </div>
 
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            onClick={handleSaveWelcomeConfig}
-          >
+          <div>
+            <label className="block text-xs font-medium text-foreground">
+              {activeLanguage === "en" ? "Welcome Message (EN)" : "Welcome Message (ID)"}
+            </label>
+            {activeLanguage === "en" ? (
+              <input
+                type="text"
+                data-testid="boot-welcome-msg-en-input"
+                value={welcomeForm.welcomeMessage}
+                onChange={(e) =>
+                  setWelcomeForm({
+                    ...welcomeForm,
+                    welcomeMessage: e.target.value,
+                  })
+                }
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+              />
+            ) : (
+              <input
+                type="text"
+                data-testid="boot-welcome-msg-id-input"
+                value={welcomeForm.welcomeMessageId ?? ""}
+                placeholder={welcomeForm.welcomeMessage || "Pesan sambutan dalam Bahasa Indonesia"}
+                onChange={(e) =>
+                  setWelcomeForm({
+                    ...welcomeForm,
+                    welcomeMessageId: e.target.value,
+                  })
+                }
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+              />
+            )}
+          </div>
+
+          <Button type="button" size="sm" disabled={busy} onClick={handleSaveWelcomeConfig}>
             Save & Publish Boot Config
           </Button>
         </div>
@@ -209,32 +271,40 @@ export function BootExperienceManager({
             Regional Greetings ({greetings.length})
           </h2>
 
-          <div className="grid gap-2 sm:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-6">
             <input
               type="text"
-              placeholder="Language (e.g., Aceh)"
+              placeholder="Language (e.g., Sundanese)"
               value={newGreeting.language}
-              onChange={(e) =>
-                setNewGreeting({ ...newGreeting, language: e.target.value })
-              }
+              onChange={(e) => setNewGreeting({ ...newGreeting, language: e.target.value })}
               className="rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
             />
             <input
               type="text"
               placeholder="Greeting phrase"
               value={newGreeting.greeting}
-              onChange={(e) =>
-                setNewGreeting({ ...newGreeting, greeting: e.target.value })
-              }
+              onChange={(e) => setNewGreeting({ ...newGreeting, greeting: e.target.value })}
               className="rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
             />
             <input
               type="text"
-              placeholder="Meaning"
+              placeholder="Meaning EN"
               value={newGreeting.meaning}
-              onChange={(e) =>
-                setNewGreeting({ ...newGreeting, meaning: e.target.value })
-              }
+              onChange={(e) => setNewGreeting({ ...newGreeting, meaning: e.target.value })}
+              className="rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+            />
+            <input
+              type="text"
+              placeholder="Meaning ID"
+              value={newGreeting.meaningId ?? ""}
+              onChange={(e) => setNewGreeting({ ...newGreeting, meaningId: e.target.value })}
+              className="rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
+            />
+            <input
+              type="text"
+              placeholder="Region EN"
+              value={newGreeting.regionNote ?? ""}
+              onChange={(e) => setNewGreeting({ ...newGreeting, regionNote: e.target.value })}
               className="rounded-md border border-border-token bg-background px-3 py-1.5 text-xs text-foreground"
             />
             <Button
@@ -256,12 +326,21 @@ export function BootExperienceManager({
                 className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs"
               >
                 <div>
-                  <span className="font-mono text-[11px] text-accent">
-                    #{g.displayOrder} · {g.language}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] text-accent">
+                      #{g.displayOrder} · {g.language}
+                      {g.regionNote && g.regionNote.trim().length > 0 && (
+                        <span className="text-secondary-foreground"> · [{g.regionNote}]</span>
+                      )}
+                    </span>
+                    <AdminCompletenessPills
+                      completeness={getBootGreetingCompleteness(g)}
+                    />
+                  </div>
                   <p className="font-semibold text-foreground">{g.greeting}</p>
                   <p className="text-[11px] text-secondary-foreground">
-                    &ldquo;{g.meaning}&rdquo;
+                    EN: &ldquo;{g.meaning}&rdquo;
+                    {g.meaningId && ` · ID: "${g.meaningId}"`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -290,272 +369,85 @@ export function BootExperienceManager({
   );
 }
 
-const BUCKETS: StorageBucketName[] = [
-  "projects",
-  "profile",
-  "certificates",
-  "articles",
-  "og-images",
-];
-
-export function MediaLibraryManager({
-  assets,
-}: {
-  assets: MediaAssetRecord[];
-}) {
-  const router = useRouter();
-  const [bucket, setBucket] = useState<StorageBucketName>("projects");
-  const [fileName, setFileName] = useState("geoentity-architecture.webp");
-  const [mimeType, setMimeType] = useState("image/webp");
-  const [sizeBytes, setSizeBytes] = useState(245000);
-  const [altText, setAltText] = useState(
-    "GeoEntity PostGIS spatial indexing diagram",
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleUpload() {
-    setBusy(true);
-    const res = await uploadMediaAssetAction({
-      bucket,
-      fileName,
-      mimeType,
-      sizeBytes,
-      altText,
-    });
-    setBusy(false);
-    setStatus({ ok: res.ok, message: res.message });
-    router.refresh();
-  }
-
-  async function handleConfirmDelete() {
-    if (!deleteId) return;
-    setBusy(true);
-    const res = await deleteMediaAssetAction(deleteId);
-    setBusy(false);
-    setDeleteId(null);
-    setStatus({ ok: res.ok, message: res.message });
-    router.refresh();
-  }
-
-  const filtered = assets.filter(
-    (a) =>
-      a.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.altText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.bucket.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  return (
-    <div data-testid="admin-media-manager">
-      <AdminPageHeader
-        eyebrow="Experience & Settings"
-        title="Media Library & Storage Buckets"
-        description="Upload validated images and PDFs to structured buckets. Active references in projects and certifications are protected from accidental deletion."
-      />
-
-      <AdminStatusBanner status={status} onDismiss={() => setStatus(null)} />
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-4 rounded-xl border border-border-token bg-background p-6">
-          <h2 className="text-sm font-semibold text-foreground">
-            Upload Media Asset
-          </h2>
-
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              Target Bucket
-            </label>
-            <select
-              value={bucket}
-              onChange={(e) => setBucket(e.target.value as StorageBucketName)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
-            >
-              {BUCKETS.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              File Name
-            </label>
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-foreground">
-                MIME Type
-              </label>
-              <input
-                type="text"
-                value={mimeType}
-                onChange={(e) => setMimeType(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-foreground">
-                Size (Bytes)
-              </label>
-              <input
-                type="number"
-                value={sizeBytes}
-                onChange={(e) => setSizeBytes(Number(e.target.value))}
-                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              Accessibility Alt Text
-            </label>
-            <input
-              type="text"
-              value={altText}
-              onChange={(e) => setAltText(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
-            />
-          </div>
-
-          <Button
-            type="button"
-            disabled={busy}
-            onClick={handleUpload}
-            data-testid="upload-media-btn"
-            className="w-full"
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Validate & Upload Asset
-          </Button>
-        </div>
-
-        <div className="space-y-4 rounded-xl border border-border-token bg-background p-6 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Stored Assets ({filtered.length})
-            </h2>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                placeholder="Search filename or bucket..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-md border border-border-token bg-surface pl-8 pr-3 py-1.5 text-xs text-foreground"
-              />
-            </div>
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border-token p-8 text-center text-xs text-muted-foreground">
-              No media assets uploaded in this session yet.
-            </div>
-          ) : (
-            <div className="divide-y divide-border-token rounded-lg border border-border-token">
-              {filtered.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 p-3.5 text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <ImageIcon
-                      className="h-5 w-5 text-accent"
-                      aria-hidden="true"
-                    />
-                    <div>
-                      <p className="font-mono font-semibold text-foreground">
-                        {item.storagePath}
-                      </p>
-                      <p className="text-[11px] text-secondary-foreground">
-                        {item.mimeType} · {(item.sizeBytes / 1024).toFixed(1)}{" "}
-                        KB · Alt: &ldquo;{item.altText || "None"}&rdquo;
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{item.bucket}</Badge>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteId(item.id)}
-                      aria-label={`Delete ${item.fileName}`}
-                      className="text-muted-foreground hover:text-red-600"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <AdminConfirmDialog
-        open={Boolean(deleteId)}
-        title="Delete Media Asset?"
-        description="If this asset is currently referenced by any project or certification, deletion will be blocked."
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleteId(null)}
-      />
-    </div>
-  );
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function ResumeManager({
-  resumes,
-}: {
-  resumes: ResumeFileRecord[];
-}) {
+export function ResumeManager({ resumes }: { resumes: ResumeFileRecord[] }) {
   const router = useRouter();
-  const [versionLabel, setVersionLabel] = useState("v2026.1");
-  const [fileName, setFileName] = useState(
-    "Muhamad-Fauzan-Software-Engineer-Resume.pdf",
-  );
-  const [summaryNote, setSummaryNote] = useState(
-    "Updated backend architecture and thesis defense highlights",
-  );
-  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  async function handleUploadResume() {
-    setBusy(true);
-    const res = await uploadResumeVersionAction({
-      versionLabel,
-      fileName,
-      mimeType: "application/pdf",
-      sizeBytes: 185000,
-      summaryNote,
-    });
-    setBusy(false);
-    setStatus({ ok: res.ok, message: res.message });
-    router.refresh();
+  const activeResume = resumes.find((r) => r.isActive && r.status === "published");
+  const previousResumes = resumes.filter((r) => r.id !== activeResume?.id);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setStatus({
+        ok: false,
+        message: "File rejected: only PDF files (.pdf) are permitted.",
+      });
+      setSelectedFile(null);
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setStatus({
+        ok: false,
+        message: `File rejected: file size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds maximum limit of 10 MB.`,
+      });
+      setSelectedFile(null);
+      return;
+    }
+
+    setStatus(null);
+    setSelectedFile(file);
   }
 
-  async function handlePublishActive(resumeId: string) {
+  async function handleUploadAndActivate() {
+    if (!selectedFile) return;
+
     setBusy(true);
-    const res = await publishActiveResumeAction(resumeId);
-    setBusy(false);
-    setStatus({ ok: res.ok, message: res.message });
-    router.refresh();
+    setStatus(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("fileName", selectedFile.name);
+
+      const res = await fetch("/api/admin/resume/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || data.message || "Failed to upload resume.");
+      }
+
+      setStatus({
+        ok: true,
+        message: data.message || `Resume "${selectedFile.name}" uploaded and set as Active Resume.`,
+      });
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      router.refresh();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed.";
+      setStatus({ ok: false, message: msg });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDelete(resumeId: string) {
@@ -563,159 +455,253 @@ export function ResumeManager({
     const res = await deleteResumeVersionAction(resumeId);
     setBusy(false);
     setStatus({ ok: res.ok, message: res.message });
+    setDeleteId(null);
     router.refresh();
   }
 
   return (
-    <div data-testid="admin-resume-manager">
+    <div data-testid="admin-resume-manager" className="space-y-6">
       <AdminPageHeader
         eyebrow="Experience & Settings"
-        title="Resume / CV Version Manager"
-        description="Upload PDF resume versions as strictly private drafts. Only the single version marked Active & Published is downloadable by public visitors."
+        title="Resume Manager"
+        description="Choose a PDF directly from your device. Once uploaded, it is automatically set as the Active Resume and published on your website."
       />
 
       <AdminStatusBanner status={status} onDismiss={() => setStatus(null)} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Hidden native HTML file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        onChange={handleFileSelect}
+        className="hidden"
+        data-testid="resume-file-picker"
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Section 1: Choose & Upload from Device */}
         <div className="space-y-4 rounded-xl border border-border-token bg-background p-6">
-          <h2 className="text-sm font-semibold text-foreground">
-            Upload New Resume PDF (Private Draft)
-          </h2>
-
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              Version Label
-            </label>
-            <input
-              type="text"
-              value={versionLabel}
-              onChange={(e) => setVersionLabel(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
-            />
+          <div className="flex items-center gap-2">
+            <FileUp className="h-4 w-4 text-accent" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">
+              {activeResume ? "Replace Active Resume" : "Upload New Resume"}
+            </h2>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              PDF File Name
-            </label>
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
-            />
+          <p className="text-xs text-secondary-foreground leading-relaxed">
+            Select a PDF document from your local computer. Maximum allowed file size is{" "}
+            <span className="font-semibold text-foreground">10 MB</span>. Uploading will
+            automatically activate and publish the new resume.
+          </p>
+
+          <div className="pt-2">
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              data-testid="choose-pdf-button"
+              className="w-full sm:w-auto"
+            >
+              <FileUp className="mr-2 h-4 w-4" aria-hidden="true" />
+              Choose PDF from Device
+            </Button>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-foreground">
-              Revision Summary Note
-            </label>
-            <textarea
-              rows={2}
-              value={summaryNote}
-              onChange={(e) => setSummaryNote(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
-            />
-          </div>
-
-          <Button
-            type="button"
-            disabled={busy}
-            onClick={handleUploadResume}
-            data-testid="upload-resume-btn"
-            className="w-full"
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Upload Private Draft PDF
-          </Button>
-        </div>
-
-        <div className="space-y-4 rounded-xl border border-border-token bg-background p-6 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-foreground">
-            Resume Versions ({resumes.length})
-          </h2>
-
-          {resumes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border-token p-8 text-center text-xs text-muted-foreground">
-              No resume PDF uploaded yet. Public website displays an honest
-              &ldquo;Resume available upon request&rdquo; fallback.
-            </div>
-          ) : (
-            <div className="divide-y divide-border-token rounded-lg border border-border-token">
-              {resumes.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-3 p-4 text-xs"
-                >
-                  <div className="flex items-start gap-3">
-                    <FileText
-                      className="mt-0.5 h-5 w-5 text-accent"
-                      aria-hidden="true"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-foreground">
-                          {r.versionLabel}
-                        </span>
-                        <span className="text-secondary-foreground">
-                          ({r.fileName})
-                        </span>
-                        <Badge
-                          variant={
-                            r.status === "published" && r.isActive
-                              ? "accent"
-                              : "outline"
-                          }
-                        >
-                          {r.isActive ? "ACTIVE PUBLIC" : r.status.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-secondary-foreground">
-                        {r.summaryNote}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`/api/resume/download/${r.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded border border-border-token bg-surface px-2.5 py-1 font-mono text-[11px] text-foreground hover:border-border-strong"
-                    >
-                      <Download className="h-3 w-3" aria-hidden="true" />
-                      <span>Preview PDF</span>
-                    </a>
-                    {!r.isActive && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => handlePublishActive(r.id)}
-                        data-testid={`publish-resume-${r.id}`}
-                      >
-                        <CheckCircle2
-                          className="mr-1 h-3.5 w-3.5"
-                          aria-hidden="true"
-                        />
-                        Set Active & Publish
-                      </Button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(r.id)}
-                      aria-label={`Delete ${r.versionLabel}`}
-                      className="text-muted-foreground hover:text-red-600"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+          {/* Selected File Card */}
+          {selectedFile && (
+            <div
+              data-testid="selected-file-card"
+              className="mt-4 rounded-lg border border-accent/30 bg-surface/50 p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-semibold text-foreground truncate">
+                      {selectedFile.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {formatFileSize(selectedFile.size)} • Ready to upload and activate
+                    </p>
                   </div>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setSelectedFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Clear
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleUploadAndActivate}
+                  data-testid="upload-active-resume-btn"
+                  className="w-full"
+                >
+                  {busy ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      Uploading & Activating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      Upload & Set as Active Resume
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {busy && (
+                <p className="text-[11px] font-mono text-accent animate-pulse text-center">
+                  Uploading to storage, persisting metadata, and activating...
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Current Active Resume */}
+        <div
+          data-testid="current-active-resume-section"
+          className="space-y-4 rounded-xl border border-border-token bg-background p-6"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Current Active Resume</h2>
+            {activeResume && <Badge variant="accent">ACTIVE & PUBLISHED</Badge>}
+          </div>
+
+          {activeResume ? (
+            <div
+              data-testid="current-active-resume-card"
+              className="space-y-4 rounded-lg border border-border-token bg-surface/30 p-4 text-xs"
+            >
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-6 w-6 text-accent shrink-0" aria-hidden="true" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="font-mono font-semibold text-foreground truncate">
+                    {activeResume.fileName}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-secondary-foreground text-[11px]">
+                    <span>Size: {formatFileSize(activeResume.sizeBytes)}</span>
+                    <span>•</span>
+                    <span>
+                      Updated:{" "}
+                      {new Date(activeResume.updatedAt).toLocaleDateString("en-US", {
+                        dateStyle: "medium",
+                      })}
+                    </span>
+                    <span>•</span>
+                    <span className="font-mono">{activeResume.versionLabel}</span>
+                  </div>
+                  {activeResume.summaryNote && (
+                    <p className="text-muted-foreground text-[11px] pt-1">
+                      {activeResume.summaryNote}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border-token/60">
+                <a
+                  href={`/api/resume/download/${activeResume.id}?download=true`}
+                  download={activeResume.fileName}
+                  data-testid="admin-active-resume-download"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-button-primary px-3 py-1.5 font-medium text-xs text-white hover:bg-foreground/90 transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Download PDF</span>
+                </a>
+                <a
+                  href={`/api/resume/download/${activeResume.id}?preview=true`}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="admin-active-resume-preview"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border-token bg-background px-3 py-1.5 font-medium text-xs text-foreground hover:bg-surface transition-colors"
+                >
+                  <span>Preview in New Tab</span>
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div
+              data-testid="no-active-resume-state"
+              className="rounded-lg border border-dashed border-border-token p-8 text-center text-xs text-muted-foreground"
+            >
+              <p>No active PDF resume is currently published.</p>
+              <p className="mt-1 text-secondary-foreground">
+                Choose a PDF from your device above to publish your first resume version.
+              </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Section 3: Previous Versions (History) */}
+      {previousResumes.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-border-token bg-background p-6">
+          <h2 className="text-sm font-semibold text-foreground">
+            Previous Resume Versions ({previousResumes.length})
+          </h2>
+
+          <div className="divide-y divide-border-token rounded-lg border border-border-token">
+            {previousResumes.map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 p-3.5 text-xs"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-foreground truncate">{r.fileName}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatFileSize(r.sizeBytes)} •{" "}
+                      {new Date(r.updatedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`/api/resume/download/${r.id}?preview=true`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded border border-border-token bg-surface px-2.5 py-1 font-mono text-[11px] text-foreground hover:border-border-strong"
+                  >
+                    <Download className="h-3 w-3" aria-hidden="true" />
+                    <span>Preview</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteId(r.id)}
+                    aria-label={`Delete ${r.fileName}`}
+                    className="text-muted-foreground hover:text-red-600 p-1"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <AdminConfirmDialog
+        open={Boolean(deleteId)}
+        title="Delete Resume Version?"
+        description="Are you sure you want to permanently delete this previous resume version?"
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
@@ -733,17 +719,13 @@ export function SettingsAndAuditManager({
 }) {
   const router = useRouter();
   const [form, setForm] = useState<SiteSettings>(siteSettingsEntity.draftData);
-  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
+  const [activeLanguage, setActiveLanguage] = useState<LanguagePreference>("en");
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function handleSaveDraft() {
     setBusy(true);
-    const res = await saveSiteSettingsDraftAction(
-      form,
-      "Updated site & SEO settings draft",
-    );
+    const res = await saveSiteSettingsDraftAction(form, "Updated site & SEO settings draft");
     setBusy(false);
     setStatus({ ok: res.ok, message: res.message });
     router.refresh();
@@ -751,18 +733,13 @@ export function SettingsAndAuditManager({
 
   async function handlePublish() {
     setBusy(true);
-    const saved = await saveSiteSettingsDraftAction(
-      form,
-      "Pre-publish site settings",
-    );
+    const saved = await saveSiteSettingsDraftAction(form, "Pre-publish site settings");
     if (!saved.ok) {
       setBusy(false);
       setStatus({ ok: false, message: saved.message });
       return;
     }
-    const pub = await publishSiteSettingsAction(
-      "Published site & SEO settings",
-    );
+    const pub = await publishSiteSettingsAction("Published site & SEO settings");
     setBusy(false);
     setStatus({ ok: pub.ok, message: pub.message });
     router.refresh();
@@ -776,12 +753,7 @@ export function SettingsAndAuditManager({
         description="Configure canonical SEO metadata and inspect immutable revision snapshots, publication records, and administrator audit logs."
         actions={
           <>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busy}
-              onClick={handleSaveDraft}
-            >
+            <Button type="button" variant="secondary" disabled={busy} onClick={handleSaveDraft}>
               Save Draft
             </Button>
             <Button type="button" disabled={busy} onClick={handlePublish}>
@@ -793,51 +765,102 @@ export function SettingsAndAuditManager({
 
       <AdminStatusBanner status={status} onDismiss={() => setStatus(null)} />
 
+      <AdminLanguageTabs
+        activeLanguage={activeLanguage}
+        onSelectLanguage={setActiveLanguage}
+        completeness={getSiteSettingsCompleteness(form)}
+        testIdPrefix="settings"
+      />
+
       <div className="space-y-6">
         <div className="rounded-xl border border-border-token bg-background p-6">
-          <h2 className="text-sm font-semibold text-foreground">
-            SEO & Metadata Defaults
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">SEO & Metadata Defaults</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium text-foreground">
-                Default Site Title
+                {activeLanguage === "en" ? "Default Site Title (EN)" : "Default Site Title (ID)"}
               </label>
-              <input
-                type="text"
-                value={form.siteTitle}
-                onChange={(e) =>
-                  setForm({ ...form, siteTitle: e.target.value })
-                }
-                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
-              />
+              {activeLanguage === "en" ? (
+                <input
+                  type="text"
+                  data-testid="settings-title-en-input"
+                  value={form.siteTitle}
+                  onChange={(e) => setForm({ ...form, siteTitle: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+                />
+              ) : (
+                <input
+                  type="text"
+                  data-testid="settings-title-id-input"
+                  value={form.siteTitleId ?? ""}
+                  placeholder={form.siteTitle || "Judul situs dalam Bahasa Indonesia..."}
+                  onChange={(e) => setForm({ ...form, siteTitleId: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-foreground">
-                Canonical Base URL
+                Canonical Base URL (Shared)
               </label>
               <input
                 type="url"
                 value={form.canonicalBaseUrl}
-                onChange={(e) =>
-                  setForm({ ...form, canonicalBaseUrl: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, canonicalBaseUrl: e.target.value })}
                 className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 font-mono text-xs text-foreground"
               />
             </div>
           </div>
           <div className="mt-4">
             <label className="block text-xs font-medium text-foreground">
-              Default Meta Description
+              {activeLanguage === "en"
+                ? "Default Meta Description (EN)"
+                : "Default Meta Description (ID)"}
             </label>
-            <textarea
-              rows={2}
-              value={form.siteDescription}
-              onChange={(e) =>
-                setForm({ ...form, siteDescription: e.target.value })
-              }
-              className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
-            />
+            {activeLanguage === "en" ? (
+              <textarea
+                rows={2}
+                data-testid="settings-desc-en-input"
+                value={form.siteDescription}
+                onChange={(e) => setForm({ ...form, siteDescription: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+              />
+            ) : (
+              <textarea
+                rows={2}
+                data-testid="settings-desc-id-input"
+                value={form.siteDescriptionId ?? ""}
+                placeholder={form.siteDescription || "Deskripsi meta situs dalam Bahasa Indonesia..."}
+                onChange={(e) => setForm({ ...form, siteDescriptionId: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+              />
+            )}
+          </div>
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-foreground">
+              {activeLanguage === "en"
+                ? "Footer Text / Attribution (Optional EN)"
+                : "Footer Text / Attribution (Optional ID)"}
+            </label>
+            {activeLanguage === "en" ? (
+              <input
+                type="text"
+                data-testid="settings-footer-en-input"
+                value={form.footerText ?? ""}
+                placeholder="Handcrafted portfolio built with Next.js, TypeScript & Tailwind CSS"
+                onChange={(e) => setForm({ ...form, footerText: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+              />
+            ) : (
+              <input
+                type="text"
+                data-testid="settings-footer-id-input"
+                value={form.footerTextId ?? ""}
+                placeholder={form.footerText || "Portofolio yang dirancang dengan Next.js, TypeScript & Tailwind CSS"}
+                onChange={(e) => setForm({ ...form, footerTextId: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border-token bg-background px-3 py-2 text-xs text-foreground"
+              />
+            )}
           </div>
         </div>
 
@@ -854,8 +877,8 @@ export function SettingsAndAuditManager({
               </h2>
             </div>
             <p className="mt-1 text-xs text-secondary-foreground">
-              Every draft save and publication creates a versioned snapshot.
-              Deleting an entity preserves its revision history.
+              Every draft save and publication creates a versioned snapshot. Deleting an entity
+              preserves its revision history.
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">
               {revisions.map((r) => (
@@ -869,9 +892,7 @@ export function SettingsAndAuditManager({
                     </span>
                     <Badge variant="outline">{r.state}</Badge>
                   </div>
-                  <p className="mt-1 text-secondary-foreground">
-                    {r.changeSummary}
-                  </p>
+                  <p className="mt-1 text-secondary-foreground">{r.changeSummary}</p>
                 </div>
               ))}
             </div>
@@ -884,8 +905,7 @@ export function SettingsAndAuditManager({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-accent" aria-hidden="true" />
               <h2 className="text-sm font-semibold text-foreground">
-                Administrator Audit Logs ({auditLogs.length}) · Publications (
-                {publications.length})
+                Administrator Audit Logs ({auditLogs.length}) · Publications ({publications.length})
               </h2>
             </div>
             <p className="mt-1 text-xs text-secondary-foreground">
@@ -903,9 +923,7 @@ export function SettingsAndAuditManager({
                     className="rounded-lg border border-border-token bg-surface p-3 text-xs"
                   >
                     <div className="flex items-center justify-between font-mono text-[11px]">
-                      <span className="font-semibold text-accent">
-                        {log.action}
-                      </span>
+                      <span className="font-semibold text-accent">{log.action}</span>
                       <span className="text-muted-foreground">
                         {log.entityType}:{log.entityId}
                       </span>

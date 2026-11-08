@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import path from "path";
 
 const ARTIFACT_DIR =
-  "/Users/zannho/.gemini/antigravity/brain/ca84d6f3-11dc-4b2d-975c-32f3c10448ab";
+  "/Users/zannho/.gemini/antigravity/brain/8a0a8f8f-c630-4609-8f5c-d429bbb130af";
 
 test.describe("Sprint 4 — Admin Dashboard, Single-Admin Auth, CMS CRUD & Publishing Workflow", () => {
   test("redirects unauthenticated visitors from /admin to /admin/login and blocks unauthorized preview", async ({
@@ -77,6 +77,7 @@ test.describe("Sprint 4 — Admin Dashboard, Single-Admin Auth, CMS CRUD & Publi
     // 4. Preview unpublished draft of GeoEntity as authenticated admin
     await page.getByTestId("project-preview-draft-link").click();
     await expect(page).toHaveURL(/\/projects\/geoentity\?preview=true/);
+    await page.getByTestId("boot-experience-overlay").click();
     await expect(page.getByTestId("admin-preview-banner")).toContainText(
       "ADMIN DRAFT PREVIEW MODE",
     );
@@ -95,6 +96,7 @@ test.describe("Sprint 4 — Admin Dashboard, Single-Admin Auth, CMS CRUD & Publi
     );
 
     await page.goto("/projects/geoentity");
+    await page.getByTestId("boot-experience-overlay").click();
     await expect(
       page.getByRole("heading", { name: "GeoEntity", level: 1 }),
     ).toBeVisible();

@@ -2,43 +2,49 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, Globe, RotateCcw, SkipForward } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import type { BootGreeting, BootWelcomeConfig } from "@/types/portfolio";
+import type { BootGreeting, BootWelcomeConfig, HandwritingFontId } from "@/types/portfolio";
+import type * as opentype from "opentype.js";
+import { cn } from "@/lib/utils";
+import { useLanguage } from "@/components/theme/theme-provider";
+import { pickLocalizedText } from "@/lib/i18n/localization";
+import {
+  preloadAllHandwritingFonts,
+  getOrLoadHandwritingFont,
+  getCachedHandwritingFonts,
+  selectControlledRandomFont,
+  getGlyphPaths,
+  getGreetingOriginLabel,
+  DEFAULT_HANDWRITING_FONT_ID,
+} from "@/lib/boot/handwriting-font";
+import { HandwritingGreeting } from "./handwriting-greeting";
 
 export const BOOT_EXPERIENCE_STORAGE_KEY = "mf_portfolio_boot_seen_v1";
 export const BOOT_EXPERIENCE_REPLAY_EVENT = "mf:portfolio:replay-boot";
 
+// In-memory session tracking: resets on full browser refresh, survives internal SPA navigation
+let hasCompletedBootInSession = false;
+
+/**
+ * Resets the in-memory session flag (primarily for test suites or programmatic re-runs).
+ */
+export function resetBootExperienceSession(): void {
+  hasCompletedBootInSession = false;
+}
+
 interface BootExperienceContextValue {
   replayBootExperience: () => void;
   isBootEnabled: boolean;
+  isBootOpen: boolean;
 }
 
 const BootExperienceContext = React.createContext<BootExperienceContextValue>({
   replayBootExperience: () => undefined,
   isBootEnabled: true,
+  isBootOpen: false,
 });
 
 export function useBootExperience() {
   return React.useContext(BootExperienceContext);
-}
-
-function readSeenFlag(): boolean {
-  try {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(BOOT_EXPERIENCE_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeSeenFlag(): void {
-  try {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(BOOT_EXPERIENCE_STORAGE_KEY, "1");
-  } catch {
-    // Safely ignore if localStorage is blocked or unavailable
-  }
 }
 
 export interface IndonesianBootExperienceProps {
@@ -53,6 +59,12 @@ export function IndonesianBootExperience({
   children,
 }: IndonesianBootExperienceProps) {
   const prefersReducedMotion = useReducedMotion();
+  const [loadedFonts, setLoadedFonts] = React.useState<Map<HandwritingFontId, opentype.Font>>(
+    () => new Map(getCachedHandwritingFonts()),
+  );
+  const loadedFontsRef = React.useRef(loadedFonts);
+  loadedFontsRef.current = loadedFonts;
+
   const activeGreetings = React.useMemo(
     () =>
       greetings
@@ -61,33 +73,73 @@ export function IndonesianBootExperience({
     [greetings],
   );
 
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [phase, setPhase] = React.useState<"greetings" | "welcome">("greetings");
-  const [currentIndex, setCurrentIndex] = React.useState(0);
-  const enterButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  // Synchronous initial state: ensures booting overlay is rendered on frame 0
+  // and Home content is never flashed before booting begins on page load/refresh.
+  const shouldBootInitially = Boolean(
+    config.enabled && activeGreetings.length > 0 && !hasCompletedBootInSession,
+  );
 
-  const closeAndPersist = React.useCallback(() => {
-    writeSeenFlag();
+  const [isOpen, setIsOpen] = React.useState<boolean>(shouldBootInitially);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
+  const [currentFontId, setCurrentFontId] = React.useState<HandwritingFontId>(
+    DEFAULT_HANDWRITING_FONT_ID,
+  );
+  const prevFontIdRef = React.useRef<HandwritingFontId | undefined>(undefined);
+  const isClosingRef = React.useRef(false);
+
+  // Preload all 6 handwriting fonts in parallel on client mount
+  React.useEffect(() => {
+    let active = true;
+    preloadAllHandwritingFonts().then((map) => {
+      if (active && map.size > 0) {
+        setLoadedFonts(new Map(map));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Safe dismiss handler: single-fire, prevents race conditions, marks session complete
+  const dismissBootExperience = React.useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    hasCompletedBootInSession = true;
     setIsOpen(false);
   }, []);
 
   const replayBootExperience = React.useCallback(() => {
-    if (!config.enabled) return;
+    if (!config.enabled || activeGreetings.length === 0) return;
+    isClosingRef.current = false;
     setCurrentIndex(0);
-    setPhase(activeGreetings.length > 0 ? "greetings" : "welcome");
+    prevFontIdRef.current = undefined;
     setIsOpen(true);
   }, [activeGreetings.length, config.enabled]);
 
-  // First-visit check on client mount only (never during SSR)
+  // Purge any legacy persisted flag and ensure state consistency on refresh
   React.useEffect(() => {
-    if (!config.enabled) return;
-    const alreadySeen = readSeenFlag();
-    if (!alreadySeen) {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(BOOT_EXPERIENCE_STORAGE_KEY);
+      }
+    } catch {
+      // Safe ignore
+    }
+
+    if (!config.enabled || activeGreetings.length === 0) {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+      return;
+    }
+
+    if (!hasCompletedBootInSession && !isOpen) {
       setCurrentIndex(0);
-      setPhase(activeGreetings.length > 0 ? "greetings" : "welcome");
+      prevFontIdRef.current = undefined;
+      isClosingRef.current = false;
       setIsOpen(true);
     }
-  }, [activeGreetings.length, config.enabled]);
+  }, [activeGreetings.length, config.enabled, isOpen]);
 
   // Listen to custom replay event
   React.useEffect(() => {
@@ -96,23 +148,65 @@ export function IndonesianBootExperience({
     return () => window.removeEventListener(BOOT_EXPERIENCE_REPLAY_EVENT, handleReplay);
   }, [replayBootExperience]);
 
+  const currentGreeting = activeGreetings[currentIndex];
+
+  // Assign controlled randomized font per greeting without back-to-back repetitions
+  React.useEffect(() => {
+    if (!currentGreeting) return;
+
+    const nextFontId = selectControlledRandomFont(
+      currentGreeting.greeting,
+      prevFontIdRef.current,
+      loadedFontsRef.current,
+    );
+
+    prevFontIdRef.current = nextFontId;
+    setCurrentFontId(nextFontId);
+
+    // Ensure the specific chosen font is ready
+    if (!loadedFontsRef.current.has(nextFontId)) {
+      getOrLoadHandwritingFont(nextFontId).then((f) => {
+        if (f) {
+          setLoadedFonts((prev) => {
+            if (prev.get(nextFontId) === f) return prev;
+            const next = new Map(prev);
+            next.set(nextFontId, f);
+            return next;
+          });
+        }
+      });
+    }
+  }, [currentGreeting]);
+
+  const activeFont = loadedFonts.get(currentFontId) ?? null;
+
+  // Pre-calculate vector path layout for the active greeting with the randomized font
+  const layout = React.useMemo(() => {
+    if (!activeFont || !currentGreeting) return null;
+    return getGlyphPaths(activeFont, currentGreeting.greeting);
+  }, [activeFont, currentGreeting]);
+
   // Advance through regional greetings on interval
   React.useEffect(() => {
-    if (!isOpen || phase !== "greetings") return;
+    if (!isOpen) return;
     if (activeGreetings.length === 0) {
-      setPhase("welcome");
+      dismissBootExperience();
       return;
     }
 
+    const drawTimeSeconds = layout ? layout.totalDrawTime : 0.8;
+    const holdTimeSeconds = 1.35; // Pause to admire the handwriting
+    const naturalIntervalMs = Math.round((drawTimeSeconds + holdTimeSeconds) * 1000);
+
     const intervalDuration = prefersReducedMotion
       ? Math.min(config.intervalMs, 900)
-      : Math.max(config.intervalMs, 1500);
+      : Math.max(naturalIntervalMs, config.intervalMs);
 
     const timer = window.setTimeout(() => {
       if (currentIndex + 1 < activeGreetings.length) {
         setCurrentIndex((prev) => prev + 1);
       } else {
-        setPhase("welcome");
+        dismissBootExperience();
       }
     }, intervalDuration);
 
@@ -121,232 +215,118 @@ export function IndonesianBootExperience({
     activeGreetings.length,
     config.intervalMs,
     currentIndex,
+    dismissBootExperience,
     isOpen,
-    phase,
+    layout,
     prefersReducedMotion,
   ]);
 
-  // Focus primary action when entering welcome screen
-  React.useEffect(() => {
-    if (isOpen && phase === "welcome") {
-      enterButtonRef.current?.focus();
-    }
-  }, [isOpen, phase]);
-
-  // Keyboard support: Escape skips immediately, Enter enters portfolio
+  // Keyboard support: Escape, Enter, or Space exits immediately
   React.useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        closeAndPersist();
-      } else if (event.key === "Enter" && phase === "welcome") {
-        event.preventDefault();
-        closeAndPersist();
+        dismissBootExperience();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeAndPersist, isOpen, phase]);
+  }, [dismissBootExperience, isOpen]);
 
-  const currentGreeting = activeGreetings[currentIndex];
+  const { language } = useLanguage();
+  const originLabel = currentGreeting ? getGreetingOriginLabel(currentGreeting, language) : "";
+  const localizedMeaning = currentGreeting
+    ? pickLocalizedText(language, currentGreeting.meaning, currentGreeting.meaningId)
+    : "";
 
   return (
     <BootExperienceContext.Provider
       value={{
         replayBootExperience,
         isBootEnabled: config.enabled,
+        isBootOpen: isOpen,
       }}
     >
-      {children}
+      {/* Home / public content boundary: completely hidden while booting is active */}
+      <div
+        data-testid="boot-experience-content-wrapper"
+        className={cn(
+          "h-full w-full",
+          isOpen
+            ? "invisible opacity-0 pointer-events-none"
+            : "visible opacity-100 transition-opacity duration-300",
+        )}
+        aria-hidden={isOpen}
+      >
+        {children}
+      </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Indonesian regional welcome experience"
+            aria-label="Indonesian regional welcome experience. Click anywhere or press Escape to enter"
             data-testid="boot-experience-overlay"
-            initial={{ opacity: 0 }}
+            onClick={dismissBootExperience}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                dismissBootExperience();
+              }
+            }}
+            tabIndex={0}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: prefersReducedMotion ? 0.1 : 0.35 }}
-            className="fixed inset-0 z-50 flex flex-col justify-between bg-background px-6 py-8 text-foreground sm:px-12 sm:py-10"
+            className="fixed inset-0 z-[100] flex cursor-pointer select-none items-center justify-center bg-background p-4 sm:p-6 text-foreground overflow-visible"
           >
-            {/* Top Bar: Identity indicator & Skip Action */}
-            <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between">
-              <div className="flex items-center gap-2.5 text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                <Globe className="h-4 w-4 text-accent" aria-hidden="true" />
-                <span>Nusantara Welcome</span>
-                {phase === "greetings" && activeGreetings.length > 0 && (
-                  <span aria-live="off" className="text-secondary-foreground">
-                    ({currentIndex + 1} / {activeGreetings.length})
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {phase === "greetings" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPhase("welcome")}
-                    data-testid="boot-jump-welcome-button"
-                  >
-                    Welcome Screen
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={closeAndPersist}
-                  data-testid="boot-skip-button"
+            <AnimatePresence mode="wait">
+              {currentGreeting && (
+                <motion.div
+                  key={currentGreeting.id}
+                  data-testid="boot-greeting-stage"
+                  initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+                  transition={{
+                    duration: prefersReducedMotion ? 0.1 : 0.42,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center text-center space-y-3 md:space-y-4 px-2 sm:px-4 overflow-visible"
+                  aria-live="polite"
+                  aria-label={`${currentGreeting.greeting} (${originLabel})`}
                 >
-                  <SkipForward className="h-3.5 w-3.5" aria-hidden="true" />
-                  Skip
-                </Button>
-              </div>
-            </div>
-
-            {/* Center Stage */}
-            <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col items-center justify-center text-center">
-              <AnimatePresence mode="wait">
-                {phase === "greetings" && currentGreeting ? (
-                  <motion.div
-                    key={currentGreeting.id}
-                    data-testid="boot-greeting-stage"
-                    initial={
-                      prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 14 }
-                    }
+                  {/* A. GREETING ORIGIN LABEL (PRESERVED IDENTITY - HIGH CONTRAST) */}
+                  <motion.p
+                    data-testid="boot-origin-label"
+                    initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={
-                      prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -14 }
-                    }
                     transition={{
-                      duration: prefersReducedMotion ? 0.1 : 0.42,
-                      ease: [0.22, 1, 0.36, 1],
+                      duration: prefersReducedMotion ? 0.05 : 0.32,
+                      ease: "easeOut",
                     }}
-                    className="space-y-4"
-                    aria-live="polite"
+                    className="font-mono text-xs md:text-sm font-medium tracking-[0.22em] text-[#000000] dark:text-[#ffffff] uppercase select-none"
                   >
-                    <p className="font-mono text-xs font-medium uppercase tracking-widest text-accent">
-                      {currentGreeting.language}
-                    </p>
-                    <p className="type-hero-heading text-foreground">
-                      {currentGreeting.greeting}
-                    </p>
-                    <p className="type-body text-secondary-foreground">
-                      {currentGreeting.meaning}
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="personal-welcome-screen"
-                    data-testid="boot-welcome-stage"
-                    initial={
-                      prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }
-                    }
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{
-                      duration: prefersReducedMotion ? 0.1 : 0.45,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                    className="space-y-6"
-                  >
-                    <div className="space-y-2">
-                      <p className="font-mono text-xs font-medium uppercase tracking-widest text-accent">
-                        {config.welcomeTitle}
-                      </p>
-                      <h2 className="type-page-heading text-foreground">
-                        {config.welcomeName}
-                      </h2>
-                      <p className="type-body-lg mx-auto max-w-[520px] text-secondary-foreground">
-                        {config.welcomeMessage}
-                      </p>
-                    </div>
+                    {originLabel}
+                  </motion.p>
 
-                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                      <Button
-                        ref={enterButtonRef}
-                        variant="primary"
-                        size="lg"
-                        onClick={closeAndPersist}
-                        data-testid="boot-enter-portfolio-button"
-                      >
-                        Enter Portfolio
-                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                      </Button>
+                  <span className="sr-only">
+                    {currentGreeting.greeting} ({originLabel} - {localizedMeaning})
+                  </span>
 
-                      {activeGreetings.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          onClick={() => {
-                            setCurrentIndex(0);
-                            setPhase("greetings");
-                          }}
-                          data-testid="boot-replay-greetings-button"
-                        >
-                          <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                          Replay Greetings
-                        </Button>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Bottom Progress & Quick Enter Bar */}
-            <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center justify-between gap-4 border-t border-border-token pt-5 sm:flex-row">
-              <div
-                className="flex flex-wrap items-center gap-1.5"
-                aria-label="Greeting sequence progress"
-              >
-                {activeGreetings.map((item, idx) => {
-                  const isActive =
-                    phase === "greetings" && idx === currentIndex;
-                  const isCompleted =
-                    phase === "welcome" || idx < currentIndex;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setCurrentIndex(idx);
-                        setPhase("greetings");
-                      }}
-                      aria-label={`Show ${item.language} greeting: ${item.greeting}`}
-                      className={`h-1.5 rounded-full transition-all ${
-                        isActive
-                          ? "w-7 bg-accent"
-                          : isCompleted
-                            ? "w-3 bg-foreground/40"
-                            : "w-3 bg-border-token"
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="type-caption hidden text-muted-foreground sm:inline">
-                  Press <kbd className="rounded border border-border-token px-1.5 py-0.5 font-mono text-xs">Esc</kbd> to enter immediately
-                </span>
-                {phase === "greetings" && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={closeAndPersist}
-                    data-testid="boot-direct-enter-button"
-                  >
-                    Enter Portfolio
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Button>
-                )}
-              </div>
-            </div>
+                  {/* B. HANDWRITTEN GREETING WITH RANDOMIZED FONT */}
+                  <HandwritingGreeting
+                    text={currentGreeting.greeting}
+                    layout={layout}
+                    fontId={currentFontId}
+                    prefersReducedMotion={prefersReducedMotion}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

@@ -26,6 +26,8 @@ test.describe("Sprint 5 — Security Headers, Accessibility, and Production Rout
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
+    await page.getByTestId("boot-experience-overlay").click();
+    await expect(page.getByTestId("boot-experience-overlay")).toBeHidden();
 
     // Tab into skip link
     await page.keyboard.press("Tab");

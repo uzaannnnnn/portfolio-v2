@@ -1,7 +1,7 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { CertificationsManager } from "@/components/admin/collection-managers";
 
-export default function AdminCertificationsPage() {
-  const snapshot = getAdminDashboardSnapshot();
+export default async function AdminCertificationsPage() {
+  const snapshot = await resolveAdminDashboardSnapshot();
   return <CertificationsManager items={snapshot.certifications} />;
 }

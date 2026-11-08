@@ -17,10 +17,43 @@ const FIXTURE_ADMIN_RECORD = {
   is_active: true,
 };
 
-function getSigningSecret(): string {
-  return (
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    "fixture-local-dev-admin-hmac-secret-key-2026"
+// Ephemeral in-memory fallback secret strictly generated at runtime for isolated local dev/test processes.
+// Never shared, never persistent, never hardcoded, and impossible to reuse in production.
+const FIXTURE_EPHEMERAL_SECRET = crypto.randomBytes(32).toString("hex");
+
+/**
+ * Resolves the standalone admin session HMAC signing secret.
+ * - Strictly requires ADMIN_SESSION_SECRET in production and Supabase mode.
+ * - Never falls back to SUPABASE_SERVICE_ROLE_KEY.
+ * - Never uses hardcoded secret strings.
+ * - Fails safely with a clear Security violation error when unconfigured.
+ */
+export function getSigningSecret(): string {
+  const secret = process.env.ADMIN_SESSION_SECRET?.trim();
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const mode = process.env.DATA_ADAPTER_MODE ?? "fixture";
+
+  if (isProduction || mode === "supabase") {
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        "Security violation: ADMIN_SESSION_SECRET must be configured with a standalone secret of at least 32 characters in production and Supabase modes.",
+      );
+    }
+    return secret;
+  }
+
+  // Local development / automated testing in fixture mode
+  if (secret && secret.length >= 16) {
+    return secret;
+  }
+
+  if (mode === "fixture") {
+    return FIXTURE_EPHEMERAL_SECRET;
+  }
+
+  throw new Error(
+    "Security violation: ADMIN_SESSION_SECRET is required to sign admin sessions.",
   );
 }
 
@@ -56,8 +89,16 @@ export function verifySignedAdminSessionToken(
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
 
+  let signingSecret: string;
+  try {
+    signingSecret = getSigningSecret();
+  } catch {
+    // If signing secret is not configured or invalid, safely reject session
+    return null;
+  }
+
   const expectedSignature = crypto
-    .createHmac("sha256", getSigningSecret())
+    .createHmac("sha256", signingSecret)
     .update(encoded)
     .digest("base64url");
 
@@ -114,13 +155,14 @@ export async function authenticateSingleAdminCredentials(params: {
   }
 
   // Fixture mode authentication (explicitly for local dev & automated tests)
-  const expectedEmail = (
-    process.env.ADMIN_ALLOWED_EMAIL?.trim() || FIXTURE_ADMIN_RECORD.email
-  ).toLowerCase();
+  const allowedEmails = [
+    FIXTURE_ADMIN_RECORD.email.toLowerCase(),
+    (process.env.ADMIN_ALLOWED_EMAIL?.trim() || "").toLowerCase(),
+  ].filter(Boolean);
   const expectedPassword =
     process.env.ADMIN_FIXTURE_PASSWORD?.trim() || "AdminPortfolio2026!";
 
-  if (normalizedEmail !== expectedEmail || params.password !== expectedPassword) {
+  if (!allowedEmails.includes(normalizedEmail) || params.password !== expectedPassword) {
     throw new UnauthorizedAdminError("Invalid administrator credentials.", 401);
   }
 
@@ -165,7 +207,15 @@ export async function enforceAdminSession(): Promise<VerifiedAdminContext> {
     return requireAdminSession();
   }
 
-  const cookieStore = await cookies();
+  let cookieStore;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    throw new UnauthorizedAdminError(
+      "Authentication required: no active admin session.",
+      401,
+    );
+  }
   const tokenCookie = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value;
   const payload = verifySignedAdminSessionToken(tokenCookie);
 

@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import {
   SupabaseConfigurationError,
@@ -11,11 +11,11 @@ import type { Database } from "@/types/database";
  * Server-side Supabase SSR client bound to Next.js request cookies.
  * Operates under the user's session (anon or authenticated admin) so PostgreSQL RLS policies apply.
  */
-export async function createSupabaseServerClient() {
+export async function createSupabaseServerClient(): Promise<SupabaseClient<Database>> {
   const { url, anonKey } = getRequiredSupabasePublicEnv();
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(url, anonKey, {
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -36,7 +36,7 @@ export async function createSupabaseServerClient() {
         }
       },
     },
-  });
+  }) as unknown as SupabaseClient<Database>;
 }
 
 /**

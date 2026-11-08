@@ -1,26 +1,124 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Dancing Script";
+  src: url("/fonts/DancingScript.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Caveat";
+  src: url("/fonts/Caveat.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alex Brush";
+  src: url("/fonts/AlexBrush.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Sacramento";
+  src: url("/fonts/Sacramento.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marck Script";
+  src: url("/fonts/MarckScript.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Allura";
+  src: url("/fonts/Allura.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg-primary: #ffffff;
   --bg-secondary: #f5f6f8;
+  --bg-elevated: #ffffff;
   --text-primary: #171a21;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-secondary: #334155;
+  --text-muted: #475569;
   --accent-primary: #2563eb;
   --status-success: #16a34a;
   --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --button-primary: #171a21;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg-primary: #090d16;
+    --bg-secondary: #121826;
+    --bg-elevated: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --accent-primary: #3b82f6;
+    --status-success: #22c55e;
+    --border-subtle: #1e293b;
+    --border-strong: #334155;
+    --button-primary: #2563eb;
+  }
+}
+
+.dark {
+  --bg-primary: #090d16;
+  --bg-secondary: #121826;
+  --bg-elevated: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-primary: #3b82f6;
+  --status-success: #22c55e;
+  --border-subtle: #1e293b;
+  --border-strong: #334155;
+  --button-primary: #2563eb;
+}
+
+.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f6f8;
+  --bg-elevated: #ffffff;
+  --text-primary: #171a21;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --accent-primary: #2563eb;
+  --status-success: #16a34a;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
   --button-primary: #171a21;
 }
 
 @theme inline {
   --color-background: var(--bg-primary);
   --color-surface: var(--bg-secondary);
+  --color-elevated-surface: var(--bg-elevated);
   --color-foreground: var(--text-primary);
   --color-secondary-foreground: var(--text-secondary);
   --color-muted-foreground: var(--text-muted);
   --color-accent: var(--accent-primary);
   --color-success: var(--status-success);
   --color-border-token: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
   --color-button-primary: var(--button-primary);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
@@ -30,6 +128,7 @@ html {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -52,12 +151,24 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 /* Accessible focus ring across interactive elements */
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+}
+
+/* Global Theme-Aware Text Selection (High-Contrast Inversion) */
+::selection {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+::-moz-selection {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
 }
 
 /* Typography Hierarchy Utilities (Section 5 Specification) */
@@ -103,3 +214,128 @@ body {
   font-size: 0.84375rem; /* ~13.5px */
   line-height: 1.45;
 }
+
+.font-handwriting {
+  font-family: "Dancing Script", "Caveat", cursive, sans-serif;
+}
+
+/* Radial Reveal Theme Transition (View Transition API & Fallback) */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition-duration: 0s !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  display: block;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+@keyframes theme-radial-reveal {
+  0% {
+    clip-path: circle(
+      8px at var(--theme-ripple-x, calc(100% - 36px)) var(--theme-ripple-y, 36px)
+    );
+  }
+  100% {
+    clip-path: circle(
+      var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, calc(100% - 36px))
+        var(--theme-ripple-y, 36px)
+    );
+  }
+}
+
+html.theme-transitioning::view-transition-new(root) {
+  animation: theme-radial-reveal 560ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+
+@keyframes theme-radial-fallback-reveal {
+  0% {
+    clip-path: circle(
+      8px at var(--theme-ripple-x, calc(100% - 36px)) var(--theme-ripple-y, 36px)
+    );
+    opacity: 0.85;
+  }
+  75% {
+    clip-path: circle(
+      var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, calc(100% - 36px))
+        var(--theme-ripple-y, 36px)
+    );
+    opacity: 0.25;
+  }
+  100% {
+    clip-path: circle(
+      var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, calc(100% - 36px))
+        var(--theme-ripple-y, 36px)
+    );
+    opacity: 0;
+  }
+}
+
+.theme-radial-fallback-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  animation: theme-radial-fallback-reveal 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Showcase Horizontal Scrollbar */
+.showcase-horizontal-track {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-token) transparent;
+}
+
+.showcase-horizontal-track::-webkit-scrollbar {
+  height: 6px;
+}
+
+.showcase-horizontal-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.showcase-horizontal-track::-webkit-scrollbar-thumb {
+  background-color: var(--border-token);
+  border-radius: 9999px;
+}
+
+.showcase-horizontal-track::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
+}
+
+/* Showcase Project Card Responsive Sizing */
+/* Mobile (< 768px): exactly 1 card per page, full width of container */
+.showcase-card {
+  width: 100%;
+  max-width: 380px;
+  flex-shrink: 0;
+}
+
+/* Desktop (>= 768px): exactly 3 cards per visible row */
+@media (min-width: 768px) {
+  .showcase-card {
+    width: calc((100% - 2 * 1rem) / 3);
+    max-width: 360px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .showcase-card {
+    width: calc((100% - 2 * 1.25rem) / 3);
+    max-width: 360px;
+  }
+}
+
+
+

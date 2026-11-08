@@ -1,8 +1,8 @@
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { ProjectsManager } from "@/components/admin/projects-manager";
 
-export default function AdminProjectsPage() {
-  const snapshot = getAdminDashboardSnapshot();
+export default async function AdminProjectsPage() {
+  const snapshot = await resolveAdminDashboardSnapshot();
   return (
     <ProjectsManager
       projects={snapshot.projects}

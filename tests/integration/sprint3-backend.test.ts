@@ -219,8 +219,8 @@ describe("Sprint 3 — Backend, RLS Schema, Auth Guard, Storage & Publishing Eng
     });
 
     expect(published1.entity.status).toBe("published");
-    expect(published1.revalidation.paths).toContain("/projects/geoentity");
-    expect(invalidatedPaths).toContain("/projects/geoentity");
+    expect(published1.revalidation.paths).toContain("/");
+    expect(invalidatedPaths).toContain("/");
     expect(invalidatedTags).toContain("project:geoentity");
 
     const liveAfterPublish = await engine.getPublicPublished({
@@ -446,7 +446,7 @@ describe("Sprint 3 — Backend, RLS Schema, Auth Guard, Storage & Publishing Eng
       revalidatePath: (p) => executed.push(`path:${p}`),
       revalidateTag: (t) => executed.push(`tag:${t}`),
     });
-    expect(executed).toContain("path:/projects/geoentity");
+    expect(executed).toContain("path:/");
     expect(executed).toContain("tag:project:geoentity");
   });
 });

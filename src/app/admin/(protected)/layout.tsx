@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getOptionalAdminSession } from "@/lib/auth/session";
-import { getAdminDashboardSnapshot } from "@/lib/database/cms-store";
+import { resolveAdminDashboardSnapshot } from "@/lib/database/cms-store";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function ProtectedAdminLayout({
     redirect("/admin/login?reason=unauthorized");
   }
 
-  const snapshot = getAdminDashboardSnapshot();
+  const snapshot = await resolveAdminDashboardSnapshot();
 
   return (
     <AdminShell adminEmail={admin.email} adapterMode={snapshot.adapterMode}>
