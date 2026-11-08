@@ -8,14 +8,15 @@
 
 CREATE TABLE IF NOT EXISTS public.visitor_counters (
   id TEXT PRIMARY KEY,
-  count BIGINT NOT NULL DEFAULT 0,
+  count BIGINT NOT NULL DEFAULT 563,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Initialize default counter record
 INSERT INTO public.visitor_counters (id, count, updated_at)
-VALUES ('homepage_hero', 0, NOW())
-ON CONFLICT (id) DO NOTHING;
+VALUES ('homepage_hero', 563, NOW())
+ON CONFLICT (id) DO UPDATE
+SET count = GREATEST(public.visitor_counters.count, 563);
 
 CREATE TABLE IF NOT EXISTS public.visitor_daily_fingerprints (
   fingerprint_hash TEXT PRIMARY KEY,

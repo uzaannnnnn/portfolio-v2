@@ -282,6 +282,18 @@ describe("Visitor Counter Unit & Service Tests", () => {
       expect(increments.length).toBe(1); // Exactly one increment!
       expect(await getAggregateVisitorCount()).toBe(1);
     });
+
+    it("initializes default visitor counter at 563", async () => {
+      getVisitorMemoryStore().reset(); // Resets to DEFAULT_INITIAL_VISITOR_COUNT
+      expect(await getAggregateVisitorCount()).toBe(563);
+
+      const res = await recordPortfolioVisit({
+        headers: validBrowserHeader("198.51.100.88"),
+      });
+      expect(res.incremented).toBe(true);
+      expect(res.count).toBe(564);
+      expect(await getAggregateVisitorCount()).toBe(564);
+    });
   });
 });
 

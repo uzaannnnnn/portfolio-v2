@@ -123,11 +123,13 @@ export function generateVisitorFingerprint(
     .digest("hex");
 }
 
+export const DEFAULT_INITIAL_VISITOR_COUNT = 563;
+
 /**
  * In-memory fallback and test store for visitor aggregation and deduplication.
  */
 class GlobalVisitorMemoryStore {
-  private aggregateCount: number = 0;
+  private aggregateCount: number = DEFAULT_INITIAL_VISITOR_COUNT;
   private seenFingerprints: Set<string> = new Set<string>();
 
   public recordVisit(fingerprint: string): { count: number; incremented: boolean } {
@@ -144,7 +146,7 @@ class GlobalVisitorMemoryStore {
     return this.aggregateCount;
   }
 
-  public reset(initialCount: number = 0): void {
+  public reset(initialCount: number = DEFAULT_INITIAL_VISITOR_COUNT): void {
     this.aggregateCount = initialCount;
     this.seenFingerprints.clear();
   }
@@ -195,7 +197,10 @@ export async function recordPortfolioVisit(params: {
       });
 
       if (!error && typeof data === "number") {
-        return { count: data, incremented: true };
+        return {
+          count: Math.max(data, DEFAULT_INITIAL_VISITOR_COUNT),
+          incremented: true,
+        };
       }
     } catch {
       // Fallback gracefully to in-memory store if Supabase RPC is unavailable
@@ -225,7 +230,7 @@ export async function getAggregateVisitorCount(): Promise<number> {
         .maybeSingle();
 
       if (!error && data && typeof data.count === "number") {
-        return data.count;
+        return Math.max(data.count, DEFAULT_INITIAL_VISITOR_COUNT);
       }
     } catch {
       // Fallback gracefully to in-memory store
